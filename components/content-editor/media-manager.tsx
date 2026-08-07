@@ -1,0 +1,25 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { FileImage, ImagePlus, LoaderCircle, Search, Trash2, Upload } from "lucide-react";
+import { toast } from "sonner";
+import { apiFetch } from "@/lib/api-client";
+import { canDelete, canEdit } from "@/lib/auth";
+import type { MediaRecord, Paginated } from "@/lib/types";
+import { useAuth } from "@/components/providers/app-providers";
+import { PageHeading } from "@/components/admin-shell/page-heading";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+
+export function MediaManager() {
+  const { role } = useAuth(); const input = useRef<HTMLInputElement>(null); const [items, setItems] = useState<MediaRecord[]>([]); const [loading, setLoading] = useState(true); const [uploading, setUploading] = useState(false); const [search, setSearch] = useState(""); const [error, setError] = useState("");
+  const load = () => { setLoading(true); apiFetch<Paginated<MediaRecord> | MediaRecord[]>(`/api/v1/media/?ordering=-created_at${search ? `&search=${encodeURIComponent(search)}` : ""}`).then(value => { setItems(Array.isArray(value) ? value : value.results); setError(""); }).catch(e => setError(e.message)).finally(() => setLoading(false)); };
+  useEffect(() => { const timer = setTimeout(load, 250); return () => clearTimeout(timer); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function upload(files: FileList | null) { const file = files?.[0]; if (!file) return; setUploading(true); const form = new FormData(); form.set("title", file.name.replace(/\.[^.]+$/, "")); form.set("alt_text", ""); form.set("file", file); try { const saved = await apiFetch<MediaRecord>("/api/v1/media/", { method: "POST", body: form }); setItems(current => [saved, ...current]); toast.success("Media uploaded"); } catch (e) { toast.error(e instanceof Error ? e.message : "Upload failed"); } finally { setUploading(false); if (input.current) input.current.value = ""; } }
+  async function remove(item: MediaRecord) { if (!confirm(`Delete “${item.title}”?`)) return; try { await apiFetch(`/api/v1/media/${item.id}/`, { method: "DELETE" }); setItems(current => current.filter(x => x.id !== item.id)); toast.success("Media deleted"); } catch (e) { toast.error(e instanceof Error ? e.message : "Delete failed"); } }
+  return <><PageHeading eyebrow="Library" title="Media" description="Upload and manage images and files used throughout your website." actions={canEdit(role) ? <><input ref={input} type="file" className="hidden" accept="image/*" onChange={e => upload(e.target.files)} /><Button onClick={() => input.current?.click()} disabled={uploading}>{uploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}Upload media</Button></> : undefined} /><Card><CardContent className="p-0"><div className="border-b p-4"><div className="relative max-w-sm"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Search media…" value={search} onChange={e => setSearch(e.target.value)} /></div></div>{loading ? <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-3 lg:grid-cols-4">{[1,2,3,4].map(x => <Skeleton key={x} className="aspect-square" />)}</div> : error ? <div className="grid min-h-64 place-items-center text-center"><div><p className="font-medium">Couldn’t load media</p><p className="mt-1 text-sm text-muted-foreground">{error}</p><Button variant="outline" className="mt-4" onClick={load}>Try again</Button></div></div> : items.length === 0 ? <EmptyState icon={ImagePlus} title="No media yet" description="Upload an image to use it in pages and posts." action={canEdit(role) ? "Upload media" : undefined} onAction={() => input.current?.click()} /> : <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{items.map(item => { const src = item.file ?? item.url; return <div key={item.id} className="group overflow-hidden rounded-xl border bg-card"><div className="relative aspect-square bg-muted">{src ? <Image src={src} alt={item.alt_text || item.title} fill sizes="(max-width: 640px) 50vw, 20vw" unoptimized className="object-cover" /> : <FileImage className="absolute left-1/2 top-1/2 size-8 -translate-x-1/2 -translate-y-1/2 text-muted-foreground" />}{canDelete(role) && <Button variant="destructive" size="icon" className="absolute right-2 top-2 size-8 opacity-0 shadow-md transition-opacity group-hover:opacity-100 focus:opacity-100" onClick={() => remove(item)} aria-label={`Delete ${item.title}`}><Trash2 className="size-3.5" /></Button>}</div><div className="p-3"><p className="truncate text-sm font-medium">{item.title}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{item.alt_text || "No alt text"}</p></div></div>})}</div>}</CardContent></Card></>;
+}
