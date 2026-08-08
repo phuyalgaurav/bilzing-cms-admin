@@ -14,6 +14,7 @@ Required environment variables:
 
 - `NEXT_PUBLIC_TENANT_KEY` — immutable tenant identifier
 - `NEXT_PUBLIC_API_URL` — shared Django API base URL
+- `CMS_API_INTERNAL_URL` — optional server-only Django URL for Docker/private networking
 - `NEXT_PUBLIC_ADMIN_THEME` — optional JSON theme fallback
 - `NEXT_PUBLIC_DEMO_MODE` — set to `true` for the local sample workspace, or `false` for the Django API
 

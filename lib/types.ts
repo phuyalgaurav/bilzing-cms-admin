@@ -65,7 +65,19 @@ export interface MediaRecord {
   created_at?: string;
 }
 
-export interface Paginated<T> { count: number; results: T[] }
+export interface Paginated<T> {
+  count: number;
+  results: T[];
+}
+
+export interface TenantMember {
+  id: number | string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface ModuleRecord {
   id: number | string;
@@ -77,17 +89,57 @@ export interface ModuleRecord {
   visibility: "public" | "private";
   published_at?: string | null;
   sort_order: number;
-  data: Record<string, unknown>;
+  /** Concrete resource fields (for example price, email, address). */
+  [key: string]: unknown;
   created_at: string;
   updated_at: string;
 }
 
 export interface ModuleResourceContract {
   key: string;
+  canonical_path?: string;
   admin_endpoint: string;
   public_endpoint: string;
   public_read: boolean;
   public_create: boolean;
+  fields: ResourceField[];
+  line_items?: {
+    key: "line_items";
+    label: string;
+    fields: ResourceField[];
+  } | null;
+  support?: {
+    label: string;
+    endpoint: string;
+    parent_field: string;
+    fields: ResourceField[];
+  } | null;
+  workflow?: Array<{ value: string; label: string }>;
+  actions?: string[];
+}
+
+export interface ResourceField {
+  key: string;
+  label: string;
+  type:
+    | "text"
+    | "textarea"
+    | "number"
+    | "relation"
+    | "file"
+    | "date"
+    | "datetime"
+    | "time"
+    | "email"
+    | "url"
+    | "boolean"
+    | "select"
+    | "json";
+  required: boolean;
+  options?: [string, string][];
+  help_text?: string;
+  relation_endpoint?: string;
+  relation_label_field?: string;
 }
 
 export interface ModuleContract {
