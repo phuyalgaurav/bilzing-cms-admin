@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-client";
 import { adminModulePath, getAdminResourceEndpoint } from "@/lib/module-api";
+import { API_URL } from "@/lib/tenant-config";
 import { canDelete, canEdit } from "@/lib/auth";
 import type { MediaRecord, Paginated } from "@/lib/types";
 import { useAuth } from "@/components/providers/app-providers";
@@ -32,6 +33,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const imagePattern = /\.(avif|gif|jpe?g|png|svg|webp)(\?.*)?$/i;
 
+function mediaUrl(value?: string) {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value) || value.startsWith("data:")) return value;
+  return API_URL ? new URL(value, `${API_URL}/`).toString() : value;
+}
+
 export function MediaManager() {
   const { role } = useAuth();
   const input = useRef<HTMLInputElement>(null);
@@ -41,6 +48,10 @@ export function MediaManager() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [editor, setEditor] = useState<MediaRecord>();
+  const [pendingFile, setPendingFile] = useState<File>();
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadAltText, setUploadAltText] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<MediaRecord>();
   const [metadataText, setMetadataText] = useState("{}");
   const [saving, setSaving] = useState(false);
 
@@ -69,13 +80,21 @@ export function MediaManager() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  async function upload(files: FileList | null) {
+  function chooseFile(files: FileList | null) {
     const file = files?.[0];
+    if (!file) return;
+    setPendingFile(file);
+    setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+    setUploadAltText("");
+  }
+
+  async function upload() {
+    const file = pendingFile;
     if (!file) return;
     setUploading(true);
     const form = new FormData();
-    form.set("title", file.name.replace(/\.[^.]+$/, ""));
-    form.set("alt_text", "");
+    form.set("title", uploadTitle.trim() || file.name.replace(/\.[^.]+$/, ""));
+    form.set("alt_text", uploadAltText.trim());
     form.set(
       "metadata",
       JSON.stringify({
@@ -94,6 +113,7 @@ export function MediaManager() {
         },
       );
       setItems((current) => [saved, ...current]);
+      setPendingFile(undefined);
       toast.success("Media uploaded");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Upload failed");
@@ -147,12 +167,6 @@ export function MediaManager() {
   }
 
   async function remove(item: MediaRecord) {
-    if (
-      !window.confirm(
-        `Delete “${item.title}”? This also removes the stored file.`,
-      )
-    )
-      return;
     try {
       await apiFetch(
         adminModulePath(
@@ -162,6 +176,7 @@ export function MediaManager() {
         { method: "DELETE" },
       );
       setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setDeleteTarget(undefined);
       toast.success("Media deleted");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Delete failed");
@@ -181,7 +196,8 @@ export function MediaManager() {
                 ref={input}
                 type="file"
                 className="hidden"
-                onChange={(event) => upload(event.target.files)}
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                onChange={(event) => chooseFile(event.target.files)}
               />
               <Button
                 onClick={() => input.current?.click()}
@@ -238,7 +254,7 @@ export function MediaManager() {
           ) : (
             <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((item) => {
-                const src = item.file ?? item.url;
+                const src = mediaUrl(item.file ?? item.url);
                 const isImage = Boolean(src && imagePattern.test(src));
                 return (
                   <div
@@ -275,7 +291,7 @@ export function MediaManager() {
                             variant="destructive"
                             size="icon"
                             className="size-8"
-                            onClick={() => remove(item)}
+                            onClick={() => setDeleteTarget(item)}
                             aria-label={`Delete ${item.title}`}
                           >
                             <Trash2 className="size-3.5" />
@@ -299,6 +315,43 @@ export function MediaManager() {
           )}
         </CardContent>
       </Card>
+      <Dialog
+        open={!!pendingFile}
+        onOpenChange={(open) => !open && setPendingFile(undefined)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogTitle>Add media details</DialogTitle>
+          <DialogDescription>
+            Give this file a clear name and alternative text before uploading it.
+          </DialogDescription>
+          {pendingFile && (
+            <form
+              className="mt-6 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void upload();
+              }}
+            >
+              <p className="text-sm text-muted-foreground">{pendingFile.name}</p>
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium">Name</span>
+                <Input value={uploadTitle} onChange={(event) => setUploadTitle(event.target.value)} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium">Alternative text</span>
+                <Input value={uploadAltText} onChange={(event) => setUploadAltText(event.target.value)} placeholder="Describe this image for screen readers" />
+              </label>
+              <div className="flex justify-end gap-2 border-t pt-5">
+                <Button type="button" variant="outline" onClick={() => setPendingFile(undefined)}>Cancel</Button>
+                <Button type="submit" disabled={uploading}>
+                  {uploading && <LoaderCircle className="size-4 animate-spin" />}
+                  Upload media
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!editor}
         onOpenChange={(open) => !open && setEditor(undefined)}
@@ -353,6 +406,18 @@ export function MediaManager() {
               </div>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(undefined)}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Delete media?</DialogTitle>
+          <DialogDescription>
+            This permanently removes {deleteTarget?.title || "this file"} and its stored file.
+          </DialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(undefined)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteTarget && void remove(deleteTarget)}>Delete media</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

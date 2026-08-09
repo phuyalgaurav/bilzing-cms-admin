@@ -9,6 +9,7 @@ import {
   LayoutTemplate,
   Newspaper,
   Plus,
+  Settings2,
 } from "lucide-react";
 import { getAdminModuleDirectory, getAdminModuleRecords } from "@/lib/module-api";
 import type {
@@ -21,6 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { moduleExperience, modulePrimaryPath } from "@/lib/module-experience";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 const resources = [
   {
@@ -84,6 +87,25 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<ContentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
+  const [widgets, setWidgets] = useState({ stats: true, tools: true, recent: true });
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(`cms-dashboard:${config.tenant_key}`);
+    if (saved) {
+      try {
+        setWidgets((current) => ({ ...current, ...JSON.parse(saved) }));
+      } catch {
+        window.localStorage.removeItem(`cms-dashboard:${config.tenant_key}`);
+      }
+    }
+  }, [config.tenant_key]);
+
+  function updateWidget(key: keyof typeof widgets, value: boolean) {
+    const next = { ...widgets, [key]: value };
+    setWidgets(next);
+    window.localStorage.setItem(`cms-dashboard:${config.tenant_key}`, JSON.stringify(next));
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -129,18 +151,15 @@ export default function DashboardPage() {
       <PageHeading
         title="Dashboard"
         actions={
-          mayEdit ? (
-            <Link
-              href="/pages?new=true"
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm hover:brightness-95"
-            >
-              <Plus className="size-4" />
-              New page
-            </Link>
-          ) : undefined
+          <>
+            <Button variant="outline" size="icon" onClick={() => setCustomizing(true)} aria-label="Customize dashboard">
+              <Settings2 className="size-4" />
+            </Button>
+            {mayEdit ? <Link href="/pages?new=true" className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm hover:brightness-95"><Plus className="size-4" />New page</Link> : null}
+          </>
         }
       />
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      {widgets.stats ? <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {activeResources.map(({ label, href, icon: Icon }) => (
           <Link key={label} href={href}>
             <Card className="group h-full hover:border-primary/30">
@@ -163,9 +182,9 @@ export default function DashboardPage() {
             </Card>
           </Link>
         ))}
-      </section>
+      </section> : null}
 
-      {operationalModules.length ? (
+      {widgets.tools && operationalModules.length ? (
         <section className="mt-6">
           <h2 className="mb-3 text-sm font-semibold">Workspace tools</h2>
           <Card
@@ -197,7 +216,7 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
-      <section className="mt-6">
+      {widgets.recent ? <section className="mt-6">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <div>
@@ -261,7 +280,20 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </section>
+      </section> : null}
+      <Dialog open={customizing} onOpenChange={setCustomizing}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Customize dashboard</DialogTitle>
+          <DialogDescription>Choose the sections you want to see. Your layout is saved for this workspace in this browser.</DialogDescription>
+          <div className="mt-6 space-y-3">
+            {([['stats', 'Content overview'], ['tools', 'Workspace tools'], ['recent', 'Recently updated']] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm font-medium">
+                {label}<input type="checkbox" checked={widgets[key]} onChange={(event) => updateWidget(key, event.target.checked)} className="size-4 accent-primary" />
+              </label>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
