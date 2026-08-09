@@ -6,9 +6,43 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public details?: unknown,
+    public retryAfterSeconds?: number,
+    public rateLimit?: { scope?: string; label?: string; rate?: string },
   ) {
     super(message);
   }
+}
+
+type RateLimitDetails = {
+  scope?: string;
+  label?: string;
+  rate?: string;
+  retry_after_seconds?: number;
+};
+
+export function apiErrorMessage(
+  details: unknown,
+  status: number,
+  retryAfterHeader?: string | null,
+) {
+  const data = details && typeof details === "object"
+    ? (details as Record<string, unknown>)
+    : undefined;
+  const rateLimit = data?.rate_limit as RateLimitDetails | undefined;
+  const retryAfterSeconds =
+    rateLimit?.retry_after_seconds ??
+    (Number.parseInt(retryAfterHeader ?? "", 10) || undefined);
+  if (rateLimit) {
+    return `You’ve reached the ${rateLimit.label ?? "API"} limit (${rateLimit.rate ?? "limited"}). Try again${retryAfterSeconds ? ` in ${retryAfterSeconds} second${retryAfterSeconds === 1 ? "" : "s"}` : " shortly"}.`;
+  }
+  const fieldMessage = data
+    ? Object.entries(data)
+        .map(([field, value]) => `${field.replace(/_/g, " ")}: ${Array.isArray(value) ? value.join(" ") : String(value)}`)
+        .join(" · ")
+    : "";
+  return typeof data?.detail === "string"
+    ? data.detail
+    : fieldMessage || `Request failed (${status})`;
 }
 
 let accessToken: string | null = null;
@@ -18,18 +52,28 @@ export function setAccessToken(token: string | null) {
 
 async function parseError(response: Response) {
   const details = await response.json().catch(() => null);
-  const fieldMessage =
-    details && typeof details === "object"
-      ? Object.entries(details as Record<string, unknown>)
-          .map(([field, value]) => `${field.replace(/_/g, " ")}: ${Array.isArray(value) ? value.join(" ") : String(value)}`)
-          .join(" · ")
-      : "";
+  const rateLimit =
+    details && typeof details === "object" && "rate_limit" in details
+      ? (details.rate_limit as {
+          scope?: string;
+          label?: string;
+          rate?: string;
+          retry_after_seconds?: number;
+        })
+      : undefined;
+  const retryAfterSeconds =
+    rateLimit?.retry_after_seconds ??
+    (Number.parseInt(response.headers.get("Retry-After") ?? "", 10) ||
+      undefined);
+  const rateLimitMessage = rateLimit
+    ? `You’ve reached the ${rateLimit.label ?? "API"} limit (${rateLimit.rate ?? "limited"}). Try again${retryAfterSeconds ? ` in ${retryAfterSeconds} second${retryAfterSeconds === 1 ? "" : "s"}` : " shortly"}.`
+    : undefined;
   return new ApiError(
-    typeof details?.detail === "string"
-      ? details.detail
-      : fieldMessage || `Request failed (${response.status})`,
+    rateLimitMessage ?? apiErrorMessage(details, response.status, response.headers.get("Retry-After")),
     response.status,
     details,
+    retryAfterSeconds,
+    rateLimit,
   );
 }
 
@@ -76,6 +120,6 @@ export async function publicSiteFetch<T>(
   headers.set("X-Tenant-Key", TENANT_KEY);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
-  if (!response.ok) throw new Error(`Public CMS request failed (${response.status}).`);
+  if (!response.ok) throw await parseError(response);
   return response.json() as Promise<T>;
 }

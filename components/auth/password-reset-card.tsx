@@ -6,6 +6,7 @@ import { CheckCircle2, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useTenant } from "@/components/providers/app-providers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { apiErrorMessage } from "@/lib/api-client";
 
 export function PasswordResetCard({
   token,
@@ -43,13 +44,8 @@ export function PasswordResetCard({
       );
       const data = (await response.json()) as Record<string, unknown>;
       if (!response.ok) {
-        const detail = data.detail ?? data.non_field_errors;
         throw new Error(
-          Array.isArray(detail)
-            ? detail.join(" ")
-            : typeof detail === "string"
-              ? detail
-              : "The request could not be completed.",
+          apiErrorMessage(data, response.status, response.headers.get("Retry-After")),
         );
       }
       setMessage(String(data.detail ?? "The request was completed."));

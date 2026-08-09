@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { setAccessToken } from "@/lib/api-client";
+import { apiErrorMessage, setAccessToken } from "@/lib/api-client";
 import {
   applyTheme,
   fetchTenantConfig,
@@ -179,7 +179,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await response.json();
       if (!response.ok)
-        throw new Error(data.detail ?? "Email or password is incorrect.");
+        throw new Error(apiErrorMessage(data, response.status, response.headers.get("Retry-After")));
       setSession(data);
       lastRefreshAt.current = Date.now();
       router.replace("/dashboard");
@@ -196,7 +196,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await response.json();
       if (!response.ok)
-        throw new Error(data.detail ?? "The invitation could not be accepted.");
+        throw new Error(apiErrorMessage(data, response.status, response.headers.get("Retry-After")));
       setSession(data);
       lastRefreshAt.current = Date.now();
       router.replace("/dashboard");

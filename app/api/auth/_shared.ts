@@ -70,8 +70,14 @@ export async function forwardAuth(path: string, body: unknown) {
     const data = await response
       .json()
       .catch(() => ({ detail: "Authentication request failed." }));
-    if (!response.ok)
-      return NextResponse.json(data, { status: response.status });
+    if (!response.ok) {
+      const result = NextResponse.json(data, { status: response.status });
+      ["Retry-After", "X-RateLimit-Scope", "X-RateLimit-Limit"].forEach((header) => {
+        const value = response.headers.get(header);
+        if (value) result.headers.set(header, value);
+      });
+      return result;
+    }
     if (path.includes("password-reset")) return NextResponse.json(data);
     if (data.tenant_key && data.tenant_key !== tenantKey)
       return NextResponse.json({ detail: "Tenant mismatch." }, { status: 403 });
