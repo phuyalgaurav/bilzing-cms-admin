@@ -20,6 +20,10 @@ Required environment variables:
 
 Demo login: `admin@bilzing.test` / `demo1234`.
 
+To run the frontend by itself, use `npm run dev:demo`. It overrides any
+backend-connected environment values, enables every CMS module, and keeps demo
+records, edits, workflow changes, members, and uploads in browser storage.
+
 ## Checks
 
 ```bash

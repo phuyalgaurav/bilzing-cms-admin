@@ -1,6 +1,14 @@
 import { apiFetch } from "./api-client";
 import { API_URL, TENANT_KEY } from "./tenant-config";
-import type { ModuleContract, ModuleRecord, Paginated } from "./types";
+import type {
+  ModuleContract,
+  ModuleRecord,
+  Paginated,
+  RecordAttachment,
+  RecordContext,
+  RecordNote,
+  RecordTag,
+} from "./types";
 
 function detailPath(endpoint: string, slug?: string) {
   const base = endpoint.endsWith("/") ? endpoint : `${endpoint}/`;
@@ -34,6 +42,24 @@ export function getAdminModuleDirectory() {
   return apiFetch<ModuleContract[]>("/api/v1/admin/modules/");
 }
 
+let directoryRequest: Promise<ModuleContract[]> | undefined;
+
+/** Resolve endpoints from the tenant's active server contract, never from a hard-coded route. */
+export function getAdminResourceEndpoint(moduleKey: string, resourceKey: string) {
+  directoryRequest ??= getAdminModuleDirectory().catch((cause) => {
+    directoryRequest = undefined;
+    throw cause;
+  });
+  return directoryRequest.then((directory) => {
+    const endpoint = directory
+      .find((module) => module.key === moduleKey)
+      ?.resources.find((resource) => resource.key === resourceKey)?.admin_endpoint;
+    if (!endpoint)
+      throw new Error("This resource is not enabled for the current tenant.");
+    return endpoint;
+  });
+}
+
 export function getAdminModuleRecords(
   endpoint: string,
   filters: {
@@ -43,11 +69,13 @@ export function getAdminModuleRecords(
     operational_status?: string;
     ordering?: string;
     page?: number;
+    pageSize?: number;
   } = {},
 ) {
   const parameters = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined && value !== "") parameters.set(key, String(value));
+    if (value === undefined || value === "") return;
+    parameters.set(key === "pageSize" ? "page_size" : key, String(value));
   });
   const query = parameters.size ? `?${parameters.toString()}` : "";
   return apiFetch<Paginated<ModuleRecord> | ModuleRecord[]>(
@@ -118,6 +146,62 @@ export function runAdminModuleAction(
   return apiFetch<ModuleRecord>(
     `${adminModulePath(endpoint, record.slug)}actions/${encodeURIComponent(action)}/`,
     { method: "POST" },
+  );
+}
+
+function recordContextPath(endpoint: string, slug: string, suffix: string) {
+  return `${adminModulePath(endpoint, slug)}${suffix}`;
+}
+
+export function getAdminRecordContext(endpoint: string, slug: string) {
+  return apiFetch<RecordContext>(recordContextPath(endpoint, slug, "context/"));
+}
+
+export function addAdminRecordTag(
+  endpoint: string,
+  slug: string,
+  payload: { name: string; color?: string },
+) {
+  return apiFetch<RecordTag>(recordContextPath(endpoint, slug, "tags/"), {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removeAdminRecordTag(
+  endpoint: string,
+  slug: string,
+  tagSlug: string,
+) {
+  return apiFetch<void>(
+    recordContextPath(endpoint, slug, `tags/${encodeURIComponent(tagSlug)}/`),
+    { method: "DELETE" },
+  );
+}
+
+export function addAdminRecordNote(
+  endpoint: string,
+  slug: string,
+  payload: { body: string; assigned_to?: string },
+) {
+  return apiFetch<RecordNote>(recordContextPath(endpoint, slug, "notes/"), {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addAdminRecordAttachment(
+  endpoint: string,
+  slug: string,
+  file: File,
+  title = "",
+) {
+  const body = new FormData();
+  body.set("file", file);
+  if (title) body.set("title", title);
+  return apiFetch<RecordAttachment>(
+    recordContextPath(endpoint, slug, "attachments/"),
+    { method: "POST", body },
   );
 }
 

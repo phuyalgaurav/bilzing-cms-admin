@@ -127,9 +127,7 @@ export default function MembersPage() {
     return (
       <>
         <PageHeading
-          eyebrow="Workspace"
           title="Members"
-          description="Member and role management is restricted to Super Admins."
         />
         <Card>
           <EmptyState
@@ -145,9 +143,7 @@ export default function MembersPage() {
   return (
     <>
       <PageHeading
-        eyebrow="Workspace"
         title="Members"
-        description="Invite employees by email and control their workspace role."
         actions={
           canManage ? (
             <Button onClick={() => setOpen(true)}>
@@ -173,7 +169,7 @@ export default function MembersPage() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-left">
+              <table className="w-full min-w-155 text-left">
                 <thead>
                   <tr className="border-b bg-neutral-50/70 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     <th className="px-5 py-3">Email</th>

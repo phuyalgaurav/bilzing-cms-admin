@@ -1,4 +1,13 @@
-export type Role = "viewer" | "editor" | "super_admin";
+export type Role =
+  | "viewer"
+  | "editor"
+  | "staff"
+  | "support"
+  | "sales"
+  | "accountant"
+  | "manager"
+  | "administrator"
+  | "super_admin";
 export type ContentStatus = "draft" | "published";
 export type ModuleRecordStatus = ContentStatus | "archived";
 
@@ -116,6 +125,7 @@ export interface ModuleResourceContract {
   } | null;
   workflow?: Array<{ value: string; label: string }>;
   actions?: string[];
+  allowed_actions?: string[];
 }
 
 export interface ResourceField {
@@ -147,4 +157,43 @@ export interface ModuleContract {
   name: string;
   description: string;
   resources: ModuleResourceContract[];
+}
+
+export interface RecordTag {
+  id: number | string;
+  tag: { id: number | string; name: string; slug: string; color?: string };
+  created_at: string;
+}
+
+export interface RecordNote {
+  id: number | string;
+  body: string;
+  author_email: string;
+  assigned_to?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecordAttachment {
+  id: number | string;
+  title: string;
+  file: string;
+  metadata: Record<string, unknown>;
+  uploaded_by_email: string;
+  created_at: string;
+}
+
+export interface RecordActivity {
+  id: number | string;
+  event: string;
+  actor_email: string;
+  changes: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface RecordContext {
+  tags: RecordTag[];
+  notes: RecordNote[];
+  attachments: RecordAttachment[];
+  activity: RecordActivity[];
 }

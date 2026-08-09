@@ -8,7 +8,7 @@
   --background: #f5f6f8;
   --surface: #ffffff;
   --foreground: #171717;
-  --muted-foreground: #737373;
+  --muted-foreground: #666666;
   --border: #e5e5e5;
   --radius: 0.75rem;
   --font-body: Geist;
@@ -31,7 +31,7 @@
   --color-border: var(--border);
   --color-input: var(--border);
   --color-ring: var(--brand);
-  --color-destructive: #dc2626;
+  --color-destructive: #b91c1c;
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
   --radius-sm: calc(var(--radius) * 0.65);
@@ -64,6 +64,24 @@ button, a, input, textarea, select { outline: none; }
 }
 
 ::selection { background: color-mix(in srgb, var(--brand) 20%, transparent); }
+
+@keyframes cms-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cms-list-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.dialog-overlay[data-state="open"] { animation: cms-fade-in 160ms ease-out; }
+.dialog-content[data-state="open"] { animation: cms-fade-in 180ms ease-out; }
+.motion-list > * { animation: cms-list-in 220ms ease-out both; }
+.motion-list > *:nth-child(2) { animation-delay: 25ms; }
+.motion-list > *:nth-child(3) { animation-delay: 50ms; }
+.motion-list > *:nth-child(4) { animation-delay: 75ms; }
+.motion-list > *:nth-child(5) { animation-delay: 100ms; }
 
 .subtle-grid {
   background-image: linear-gradient(to right, rgb(0 0 0 / 0.025) 1px, transparent 1px),

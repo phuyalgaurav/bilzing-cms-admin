@@ -1,16 +1,30 @@
 import type { TenantConfig, TenantTheme } from "./types";
+import { moduleExperiences } from "./module-experience";
 
 export const TENANT_KEY = process.env.NEXT_PUBLIC_TENANT_KEY ?? "";
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
-export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true" || !API_URL;
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(
+  /\/$/,
+  "",
+);
+export const DEMO_MODE =
+  process.env.NEXT_PUBLIC_DEMO_MODE === "true" || !API_URL;
 
-const defaultModules = ["website_pages", "media_library", "user_management", "settings"];
-const demoModules = [...defaultModules, "blog"];
+const defaultModules = [
+  "website_pages",
+  "media_library",
+  "user_management",
+  "settings",
+];
+const demoModules = Object.keys(moduleExperiences);
 
 function parseEnabledModules(fallback = defaultModules) {
   try {
     const parsed = JSON.parse(process.env.NEXT_PUBLIC_ENABLED_MODULES ?? "[]");
-    return Array.isArray(parsed) && parsed.every(value => typeof value === "string") && parsed.length > 0 ? parsed : fallback;
+    return Array.isArray(parsed) &&
+      parsed.every((value) => typeof value === "string") &&
+      parsed.length > 0
+      ? parsed
+      : fallback;
   } catch {
     return fallback;
   }
@@ -26,7 +40,7 @@ export const neutralTheme: Required<TenantTheme> = {
   background_color: "#f5f6f8",
   surface_color: "#ffffff",
   text_color: "#171717",
-  muted_text_color: "#737373",
+  muted_text_color: "#666666",
   font_family: "Geist",
   heading_font_family: "Geist",
   border_radius: "0.75rem",
@@ -37,13 +51,20 @@ export const neutralTheme: Required<TenantTheme> = {
 };
 
 function isColor(value: unknown): value is string {
-  return typeof value === "string" && (/^#[0-9a-f]{3,8}$/i.test(value) || /^rgb(a)?\([\d\s,.%]+\)$/i.test(value));
+  return (
+    typeof value === "string" &&
+    (/^#[0-9a-f]{3,8}$/i.test(value) || /^rgb(a)?\([\d\s,.%]+\)$/i.test(value))
+  );
 }
 
 function isUrl(value: unknown): value is string {
   if (value === "") return true;
   if (typeof value !== "string") return false;
-  try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+  try {
+    return ["http:", "https:"].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
 }
 
 function isFontFamily(value: unknown): value is string {
@@ -51,24 +72,44 @@ function isFontFamily(value: unknown): value is string {
 }
 
 function parseFallback(): TenantTheme {
-  try { return JSON.parse(process.env.NEXT_PUBLIC_ADMIN_THEME ?? "{}"); } catch { return {}; }
+  try {
+    return JSON.parse(process.env.NEXT_PUBLIC_ADMIN_THEME ?? "{}");
+  } catch {
+    return {};
+  }
 }
 
 export function normalizeTheme(theme?: TenantTheme): TenantTheme {
   const input = { ...parseFallback(), ...theme };
   const normalized: TenantTheme = { ...neutralTheme, ...input };
-  for (const key of ["primary_color", "secondary_color", "accent_color", "background_color", "surface_color", "text_color", "muted_text_color"] as const) {
+  for (const key of [
+    "primary_color",
+    "secondary_color",
+    "accent_color",
+    "background_color",
+    "surface_color",
+    "text_color",
+    "muted_text_color",
+  ] as const) {
     if (!isColor(normalized[key])) normalized[key] = neutralTheme[key];
   }
-  for (const key of ["logo_url", "favicon_url", "login_background_url", "support_url"] as const) {
+  for (const key of [
+    "logo_url",
+    "favicon_url",
+    "login_background_url",
+    "support_url",
+  ] as const) {
     if (!isUrl(normalized[key])) normalized[key] = neutralTheme[key];
   }
   for (const key of ["font_family", "heading_font_family"] as const) {
     if (!isFontFamily(normalized[key])) normalized[key] = neutralTheme[key];
   }
-  if (!/^[\d.]+(px|rem|em)$/.test(normalized.border_radius ?? "")) normalized.border_radius = neutralTheme.border_radius;
-  if (!['left', 'right'].includes(normalized.sidebar_position ?? "")) normalized.sidebar_position = "left";
-  if (!['solid', 'soft'].includes(normalized.sidebar_style ?? "")) normalized.sidebar_style = "solid";
+  if (!/^[\d.]+(px|rem|em)$/.test(normalized.border_radius ?? ""))
+    normalized.border_radius = neutralTheme.border_radius;
+  if (!["left", "right"].includes(normalized.sidebar_position ?? ""))
+    normalized.sidebar_position = "left";
+  if (!["solid", "soft"].includes(normalized.sidebar_style ?? ""))
+    normalized.sidebar_style = "solid";
   return normalized;
 }
 
@@ -86,7 +127,8 @@ export function applyTheme(theme: TenantTheme) {
     "--font-body": theme.font_family,
     "--font-heading": theme.heading_font_family,
   };
-  for (const [key, value] of Object.entries(values)) if (value) root.style.setProperty(key, value);
+  for (const [key, value] of Object.entries(values))
+    if (value) root.style.setProperty(key, value);
   let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!favicon) {
     favicon = document.createElement("link");
@@ -98,10 +140,27 @@ export function applyTheme(theme: TenantTheme) {
 }
 
 export async function fetchTenantConfig(): Promise<TenantConfig> {
-  if (DEMO_MODE || !API_URL || !TENANT_KEY) return { tenant_key: TENANT_KEY || "demo", name: "Bilzing Nepal", module_preset: process.env.NEXT_PUBLIC_MODULE_PRESET ?? "general_business", enabled_modules: parseEnabledModules(demoModules), admin_theme: normalizeTheme({ brand_name: "Bilzing Content Studio", primary_color: "#171717", accent_color: "#d4ff00" }) };
-  const response = await fetch(`${API_URL}/api/v1/tenant-config/`, { headers: { "X-Tenant-Key": TENANT_KEY }, cache: "no-store" });
-  if (!response.ok) throw new Error("We couldn’t load this workspace’s settings.");
-  const config = await response.json() as TenantConfig;
-  if (config.tenant_key !== TENANT_KEY) throw new Error("Tenant configuration mismatch.");
+  if (DEMO_MODE || !API_URL || !TENANT_KEY)
+    return {
+      tenant_key: TENANT_KEY || "demo",
+      name: "Bilzing Nepal",
+      module_preset:
+        process.env.NEXT_PUBLIC_MODULE_PRESET ?? "general_business",
+      enabled_modules: parseEnabledModules(demoModules),
+      admin_theme: normalizeTheme({
+        brand_name: "Bilzing Content Studio",
+        primary_color: "#171717",
+        accent_color: "#d4ff00",
+      }),
+    };
+  const response = await fetch(`${API_URL}/api/v1/tenant-config/`, {
+    headers: { "X-Tenant-Key": TENANT_KEY },
+    cache: "no-store",
+  });
+  if (!response.ok)
+    throw new Error("We couldn’t load this workspace’s settings.");
+  const config = (await response.json()) as TenantConfig;
+  if (config.tenant_key !== TENANT_KEY)
+    throw new Error("Tenant configuration mismatch.");
   return { ...config, admin_theme: normalizeTheme(config.admin_theme) };
 }

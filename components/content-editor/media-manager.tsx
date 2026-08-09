@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-client";
+import { adminModulePath, getAdminResourceEndpoint } from "@/lib/module-api";
 import { canDelete, canEdit } from "@/lib/auth";
 import type { MediaRecord, Paginated } from "@/lib/types";
 import { useAuth } from "@/components/providers/app-providers";
@@ -46,8 +47,11 @@ export function MediaManager() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const endpoint = await getAdminResourceEndpoint("media_library", "media");
+      const query = new URLSearchParams({ ordering: "-created_at" });
+      if (search) query.set("search", search);
       const value = await apiFetch<Paginated<MediaRecord> | MediaRecord[]>(
-        `/api/v1/media/?ordering=-created_at${search ? `&search=${encodeURIComponent(search)}` : ""}`,
+        `${adminModulePath(endpoint)}?${query}`,
       );
       setItems(Array.isArray(value) ? value : value.results);
       setError("");
@@ -82,10 +86,13 @@ export function MediaManager() {
     );
     form.set("file", file);
     try {
-      const saved = await apiFetch<MediaRecord>("/api/v1/media/", {
-        method: "POST",
-        body: form,
-      });
+      const saved = await apiFetch<MediaRecord>(
+        adminModulePath(await getAdminResourceEndpoint("media_library", "media")),
+        {
+          method: "POST",
+          body: form,
+        },
+      );
       setItems((current) => [saved, ...current]);
       toast.success("Media uploaded");
     } catch (cause) {
@@ -114,7 +121,10 @@ export function MediaManager() {
     setSaving(true);
     try {
       const updated = await apiFetch<MediaRecord>(
-        `/api/v1/media/${editor.id}/`,
+        adminModulePath(
+          await getAdminResourceEndpoint("media_library", "media"),
+          String(editor.id),
+        ),
         {
           method: "PATCH",
           body: JSON.stringify({
@@ -144,7 +154,13 @@ export function MediaManager() {
     )
       return;
     try {
-      await apiFetch(`/api/v1/media/${item.id}/`, { method: "DELETE" });
+      await apiFetch(
+        adminModulePath(
+          await getAdminResourceEndpoint("media_library", "media"),
+          String(item.id),
+        ),
+        { method: "DELETE" },
+      );
       setItems((current) => current.filter((entry) => entry.id !== item.id));
       toast.success("Media deleted");
     } catch (cause) {

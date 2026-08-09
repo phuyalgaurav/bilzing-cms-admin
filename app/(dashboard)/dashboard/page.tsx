@@ -9,14 +9,10 @@ import {
   LayoutTemplate,
   Newspaper,
   Plus,
-  Sparkles,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api-client";
+import { getAdminModuleDirectory, getAdminModuleRecords } from "@/lib/module-api";
 import type {
   ContentRecord,
-  MediaRecord,
-  NavigationRecord,
-  Paginated,
 } from "@/lib/types";
 import { useAuth, useTenant } from "@/components/providers/app-providers";
 import { canEdit } from "@/lib/auth";
@@ -24,39 +20,44 @@ import { PageHeading } from "@/components/admin-shell/page-heading";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { moduleExperience, modulePrimaryPath } from "@/lib/module-experience";
 
 const resources = [
   {
     label: "Pages",
     href: "/pages",
-    endpoint: "/api/v1/pages/?ordering=-updated_at",
+    resource: "pages",
     icon: FileText,
     module: "website_pages",
   },
   {
     label: "Posts",
     href: "/posts",
-    endpoint: "/api/v1/posts/?ordering=-updated_at",
+    resource: "posts",
     icon: Newspaper,
     module: "blog",
   },
   {
     label: "Navigation",
     href: "/navigation",
-    endpoint: "/api/v1/navigations/?ordering=-updated_at",
+    resource: "navigations",
     icon: LayoutTemplate,
     module: "website_pages",
   },
   {
     label: "Media",
     href: "/media",
-    endpoint: "/api/v1/media/?ordering=-created_at",
+    resource: "media",
     icon: Images,
     module: "media_library",
   },
 ];
 
-type DashboardRecord = ContentRecord | NavigationRecord | MediaRecord;
+const builtInModules = new Set([
+  "website_pages",
+  "media_library",
+  "user_management",
+]);
 
 export default function DashboardPage() {
   const { config } = useTenant();
@@ -69,6 +70,16 @@ export default function DashboardPage() {
       ),
     [config.enabled_modules],
   );
+  const operationalModules = useMemo(
+    () =>
+      config.enabled_modules
+        .filter((moduleKey) => !builtInModules.has(moduleKey))
+        .map((moduleKey) => ({
+          key: moduleKey,
+          experience: moduleExperience(moduleKey),
+        })),
+    [config.enabled_modules],
+  );
   const [stats, setStats] = useState<Record<string, number>>({});
   const [recent, setRecent] = useState<ContentRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,17 +88,24 @@ export default function DashboardPage() {
   useEffect(() => {
     setLoading(true);
     setError(false);
-    Promise.all(
-      activeResources.map((item) =>
-        apiFetch<Paginated<DashboardRecord> | DashboardRecord[]>(item.endpoint),
-      ),
-    )
+    getAdminModuleDirectory()
+      .then((directory) =>
+        Promise.all(
+          activeResources.map((item) => {
+            const endpoint = directory
+              .find((module) => module.key === item.module)
+              ?.resources.find((resource) => resource.key === item.resource)
+              ?.admin_endpoint;
+            if (!endpoint)
+              throw new Error(`${item.label} is not enabled for this tenant.`);
+            return getAdminModuleRecords(endpoint, { ordering: "-updated_at" });
+          }),
+        ),
+      )
       .then((data) => {
         const counts: Record<string, number> = {};
         data.forEach((value, index) => {
-          counts[activeResources[index].label] = Array.isArray(value)
-            ? value.length
-            : value.count;
+          counts[activeResources[index].label] = Array.isArray(value) ? value.length : value.count;
         });
         setStats(counts);
         const pagesIndex = activeResources.findIndex(
@@ -106,14 +124,10 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [activeResources]);
 
-  const hasBlog = config.enabled_modules.includes("blog");
-
   return (
     <>
       <PageHeading
-        eyebrow="Overview"
-        title="Your content at a glance"
-        description="See what changed recently and jump back into the work that needs your attention."
+        title="Dashboard"
         actions={
           mayEdit ? (
             <Link
@@ -126,38 +140,68 @@ export default function DashboardPage() {
           ) : undefined
         }
       />
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {activeResources.map(({ label, href, icon: Icon }) => (
           <Link key={label} href={href}>
-            <Card className="group h-full transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
-              <CardContent className="flex items-center gap-4 p-5">
-                <div className="grid size-11 place-items-center rounded-xl bg-primary/8 text-primary">
-                  <Icon className="size-5" />
+            <Card className="group h-full hover:border-primary/30">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/8 text-primary">
+                  <Icon className="size-4" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">{label}</p>
                   {loading ? (
                     <Skeleton className="mt-1 h-7 w-10" />
                   ) : (
-                    <p className="text-2xl font-semibold">
+                    <p className="text-lg font-semibold">
                       {stats[label] ?? "—"}
                     </p>
                   )}
                 </div>
-                <ArrowRight className="ml-auto size-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
+                <ArrowRight className="ml-auto hidden size-4 text-muted-foreground group-hover:text-primary sm:block" />
               </CardContent>
             </Card>
           </Link>
         ))}
       </section>
-      <section className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+
+      {operationalModules.length ? (
+        <section className="mt-6">
+          <h2 className="mb-3 text-sm font-semibold">Workspace tools</h2>
+          <Card
+            className={`grid overflow-hidden sm:grid-cols-2 ${
+              operationalModules.length === 3
+                ? "lg:grid-cols-3"
+                : operationalModules.length > 3
+                  ? "xl:grid-cols-4"
+                  : ""
+            }`}
+          >
+            {operationalModules.map(({ key, experience }) => {
+              const Icon = experience.icon;
+              return (
+                <Link
+                  key={key}
+                  href={modulePrimaryPath(key)}
+                  className="flex min-w-0 items-center gap-3 border-b px-4 py-3.5 hover:bg-muted/60 sm:border-r xl:[&:nth-child(4n)]:border-r-0"
+                >
+                  <Icon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {experience.label}
+                  </span>
+                  <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+                </Link>
+              );
+            })}
+          </Card>
+        </section>
+      ) : null}
+
+      <section className="mt-6">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <div>
               <CardTitle>Recently updated</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Your latest page changes
-              </p>
             </div>
             <Link
               href="/pages"
@@ -214,47 +258,6 @@ export default function DashboardPage() {
                   </Link>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="overflow-hidden">
-          <div className="bg-neutral-950 p-6 text-white">
-            <div className="grid size-10 place-items-center rounded-xl bg-white/10">
-              <Sparkles className="size-5" />
-            </div>
-            <h2 className="mt-8 text-xl font-semibold">
-              A calmer way to publish.
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-neutral-400">
-              Draft, review, and publish without touching the application code.
-            </p>
-          </div>
-          <CardContent className="p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {mayEdit ? "Quick actions" : "Workspace access"}
-            </p>
-            {mayEdit ? (
-              <div className="mt-3 space-y-1">
-                {hasBlog && (
-                  <Link
-                    href="/posts?new=true"
-                    className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted"
-                  >
-                    Write a post <ArrowRight className="size-4" />
-                  </Link>
-                )}
-                <Link
-                  href="/media"
-                  className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted"
-                >
-                  Upload media <ArrowRight className="size-4" />
-                </Link>
-              </div>
-            ) : (
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Viewer access lets you review tenant content without changing or
-                deleting records.
-              </p>
             )}
           </CardContent>
         </Card>

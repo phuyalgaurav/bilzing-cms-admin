@@ -2,10 +2,10 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
-const buttonVariants = cva("inline-flex shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50", {
+const buttonVariants = cva("inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium transition-[background-color,border-color,color,transform] duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50", {
   variants: {
     variant: {
-      default: "bg-primary text-primary-foreground shadow-sm hover:brightness-95",
+      default: "bg-primary text-primary-foreground hover:brightness-95",
       secondary: "bg-muted text-foreground hover:bg-neutral-200",
       outline: "border bg-card hover:bg-muted",
       ghost: "hover:bg-muted",

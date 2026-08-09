@@ -5,16 +5,18 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { setAccessToken } from "@/lib/api-client";
 import {
   applyTheme,
   fetchTenantConfig,
   normalizeTheme,
 } from "@/lib/tenant-config";
-import type { Role, TenantConfig } from "@/lib/types";
+import type { Role, TenantConfig, TenantTheme } from "@/lib/types";
 
 interface AuthContextValue {
   ready: boolean;
@@ -32,134 +34,195 @@ interface TenantContextValue {
   refresh(): Promise<void>;
 }
 
+interface SessionResponse {
+  access: string;
+  role?: Role;
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 const TenantContext = createContext<TenantContextValue | null>(null);
 
-export function AppProviders({ children }: { children: React.ReactNode }) {
+const initialConfig: TenantConfig = {
+  tenant_key: "",
+  name: "Workspace",
+  module_preset: "general_business",
+  enabled_modules: [
+    "website_pages",
+    "media_library",
+    "user_management",
+    "settings",
+  ],
+  admin_theme: normalizeTheme(),
+};
+
+function TenantProvider({ children }: { children: React.ReactNode }) {
+  const [config, setConfig] = useState<TenantConfig>(initialConfig);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const currentTheme = useRef<TenantTheme>(initialConfig.admin_theme);
+  const bootstrapStarted = useRef(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const next = await fetchTenantConfig();
+      currentTheme.current = next.admin_theme;
+      setConfig(next);
+      applyTheme(next.admin_theme);
+      setError(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Couldn’t load workspace settings.",
+      );
+      applyTheme(currentTheme.current);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (bootstrapStarted.current) return;
+    bootstrapStarted.current = true;
+    void refresh();
+  }, [refresh]);
+
+  const value = useMemo<TenantContextValue>(
+    () => ({ config, loading, error, refresh }),
+    [config, error, loading, refresh],
+  );
+
+  return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
+}
+
+function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [access, setAccess] = useState<string | null>(null);
   const [role, setRole] = useState<Role>();
-  const [config, setConfig] = useState<TenantConfig>({
-    tenant_key: "",
-    name: "Workspace",
-    module_preset: "general_business",
-    enabled_modules: [
-      "website_pages",
-      "media_library",
-      "user_management",
-      "settings",
-    ],
-    admin_theme: normalizeTheme(),
-  });
-  const [loadingConfig, setLoadingConfig] = useState(true);
-  const [configError, setConfigError] = useState<string | null>(null);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
+  const lastRefreshAt = useRef(0);
+  const bootstrapStarted = useRef(false);
 
-  const setSession = useCallback((data: { access: string; role?: Role }) => {
-    setAccess(data.access);
-    setAccessToken(data.access);
-    setRole(data.role);
-  }, []);
-  const refreshConfig = useCallback(async () => {
-    setLoadingConfig(true);
-    try {
-      const next = await fetchTenantConfig();
-      setConfig(next);
-      applyTheme(next.admin_theme);
-      setConfigError(null);
-    } catch (error) {
-      setConfigError(
-        error instanceof Error
-          ? error.message
-          : "Couldn’t load workspace settings.",
-      );
-      applyTheme(config.admin_theme);
-    } finally {
-      setLoadingConfig(false);
-    }
-  }, [config.admin_theme]);
-
-  useEffect(() => {
-    refreshConfig();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    fetch("/api/auth/refresh", { method: "POST" })
-      .then(async (r) => {
-        if (r.ok) setSession(await r.json());
-      })
-      .finally(() => setReady(true));
-  }, [setSession]);
-  useEffect(() => {
-    if (!access) return;
-    let active = true;
-    async function revalidateMembership() {
-      const response = await fetch("/api/auth/refresh", { method: "POST" });
-      if (!active) return;
-      if (response.ok) {
-        setSession(await response.json());
-        return;
-      }
-      setAccess(null);
-      setAccessToken(null);
-      setRole(undefined);
-      router.replace("/login");
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void revalidateMembership();
-    };
-    window.addEventListener("focus", revalidateMembership);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      active = false;
-      window.removeEventListener("focus", revalidateMembership);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [access, router, setSession]);
-
-  const login = async (email: string, password: string) => {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.detail ?? "Email or password is incorrect.");
-    setSession(data);
-    router.replace("/dashboard");
-  };
-  const acceptInvite = async (token: string, password: string) => {
-    const response = await fetch("/api/auth/invite", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, password }),
-    });
-    const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.detail ?? "The invitation could not be accepted.");
-    setSession(data);
-    router.replace("/dashboard");
-  };
-  const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setSession({ access: "", role: undefined });
+  const clearSession = useCallback(() => {
     setAccess(null);
     setAccessToken(null);
-    if (pathname !== "/login") router.replace("/login");
-  };
+    setRole(undefined);
+  }, []);
 
-  const auth = { ready, access, role, login, acceptInvite, logout };
-  const tenant = {
-    config,
-    loading: loadingConfig,
-    error: configError,
-    refresh: refreshConfig,
-  };
+  const setSession = useCallback((session: SessionResponse) => {
+    setAccess((current) => (current === session.access ? current : session.access));
+    setAccessToken(session.access);
+    setRole((current) => (current === session.role ? current : session.role));
+  }, []);
+
+  useEffect(() => {
+    if (bootstrapStarted.current) return;
+    bootstrapStarted.current = true;
+    fetch("/api/auth/refresh", { method: "POST" })
+      .then(async (response) => {
+        if (response.ok) setSession(await response.json());
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        lastRefreshAt.current = Date.now();
+        setReady(true);
+      });
+  }, [setSession]);
+
+  const revalidateSession = useCallback(() => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+    if (Date.now() - lastRefreshAt.current < 15_000)
+      return Promise.resolve();
+
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/auth/refresh", { method: "POST" });
+        lastRefreshAt.current = Date.now();
+        if (response.ok) {
+          setSession(await response.json());
+          return;
+        }
+        clearSession();
+        router.replace("/login");
+      } catch {
+        return;
+      }
+    })().finally(() => {
+      refreshInFlight.current = null;
+    });
+    refreshInFlight.current = request;
+    return request;
+  }, [clearSession, router, setSession]);
+
+  useEffect(() => {
+    if (!access) return;
+    const onFocus = () => void revalidateSession();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void revalidateSession();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [access, revalidateSession]);
+
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.detail ?? "Email or password is incorrect.");
+      setSession(data);
+      lastRefreshAt.current = Date.now();
+      router.replace("/dashboard");
+    },
+    [router, setSession],
+  );
+
+  const acceptInvite = useCallback(
+    async (token: string, password: string) => {
+      const response = await fetch("/api/auth/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.detail ?? "The invitation could not be accepted.");
+      setSession(data);
+      lastRefreshAt.current = Date.now();
+      router.replace("/dashboard");
+    },
+    [router, setSession],
+  );
+
+  const logout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    clearSession();
+    router.replace("/login");
+  }, [clearSession, router]);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({ ready, access, role, login, acceptInvite, logout }),
+    [acceptInvite, access, login, logout, ready, role],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <TenantContext.Provider value={tenant}>
-      <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>
-    </TenantContext.Provider>
+    <TenantProvider>
+      <AuthProvider>{children}</AuthProvider>
+    </TenantProvider>
   );
 }
 
@@ -168,6 +231,7 @@ export function useAuth() {
   if (!value) throw new Error("useAuth must be inside AppProviders");
   return value;
 }
+
 export function useTenant() {
   const value = useContext(TenantContext);
   if (!value) throw new Error("useTenant must be inside AppProviders");

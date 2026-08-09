@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-client";
+import { adminModulePath, getAdminResourceEndpoint } from "@/lib/module-api";
 import { canDelete, canEdit } from "@/lib/auth";
 import type { NavigationRecord, Paginated } from "@/lib/types";
 import { slugify } from "@/lib/utils";
@@ -39,9 +40,12 @@ export function NavigationManager() {
   const [error, setError] = useState("");
   const load = () => {
     setLoading(true);
-    apiFetch<Paginated<NavigationRecord> | NavigationRecord[]>(
-      "/api/v1/navigations/?ordering=-updated_at",
-    )
+    getAdminResourceEndpoint("website_pages", "navigations")
+      .then((endpoint) =>
+        apiFetch<Paginated<NavigationRecord> | NavigationRecord[]>(
+          `${adminModulePath(endpoint)}?ordering=-updated_at`,
+        ),
+      )
       .then((value) => {
         setItems(Array.isArray(value) ? value : value.results);
         setError("");
@@ -59,8 +63,9 @@ export function NavigationManager() {
     if (!editor) return;
     setSaving(true);
     try {
+      const endpoint = await getAdminResourceEndpoint("website_pages", "navigations");
       const saved = await apiFetch<NavigationRecord>(
-        original ? `/api/v1/navigations/${original}/` : "/api/v1/navigations/",
+        adminModulePath(endpoint, original ?? undefined),
         { method: original ? "PATCH" : "POST", body: JSON.stringify(editor) },
       );
       setItems((current) =>
@@ -79,7 +84,8 @@ export function NavigationManager() {
   async function remove(item: NavigationRecord) {
     if (!confirm(`Delete “${item.name}”?`)) return;
     try {
-      await apiFetch(`/api/v1/navigations/${item.slug}/`, { method: "DELETE" });
+      const endpoint = await getAdminResourceEndpoint("website_pages", "navigations");
+      await apiFetch(adminModulePath(endpoint, item.slug), { method: "DELETE" });
       setItems((current) => current.filter((x) => x.slug !== item.slug));
       toast.success("Navigation deleted");
     } catch (e) {

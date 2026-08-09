@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { adminModulePath, getAdminResourceEndpoint } from "@/lib/module-api";
 import { canDelete, canEdit } from "@/lib/auth";
 import type { ContentRecord, Paginated } from "@/lib/types";
 import { formatDate, slugify } from "@/lib/utils";
@@ -52,12 +53,16 @@ export function ContentManager({ type }: { type: "pages" | "posts" }) {
   const [originalSlug, setOriginalSlug] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentRecord | null>(null);
+  const moduleKey = isPosts ? "blog" : "website_pages";
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const endpoint = await getAdminResourceEndpoint(moduleKey, type);
+      const query = new URLSearchParams({ ordering: "-updated_at" });
+      if (search) query.set("search", search);
       const value = await apiFetch<Paginated<ContentRecord> | ContentRecord[]>(
-        `/api/v1/${type}/?ordering=-updated_at${search ? `&search=${encodeURIComponent(search)}` : ""}`,
+        `${adminModulePath(endpoint)}?${query}`,
       );
       setItems(Array.isArray(value) ? value : value.results);
     } catch (e) {
@@ -65,7 +70,7 @@ export function ContentManager({ type }: { type: "pages" | "posts" }) {
     } finally {
       setLoading(false);
     }
-  }, [type, search]);
+  }, [moduleKey, type, search]);
   useEffect(() => {
     const timer = setTimeout(load, 250);
     return () => clearTimeout(timer);
@@ -97,9 +102,8 @@ export function ContentManager({ type }: { type: "pages" | "posts" }) {
     if (!editor) return;
     setSaving(true);
     try {
-      const path = originalSlug
-        ? `/api/v1/${type}/${originalSlug}/`
-        : `/api/v1/${type}/`;
+      const endpoint = await getAdminResourceEndpoint(moduleKey, type);
+      const path = adminModulePath(endpoint, originalSlug ?? undefined);
       const saved = await apiFetch<ContentRecord>(path, {
         method: originalSlug ? "PATCH" : "POST",
         body: JSON.stringify(editor),
@@ -126,7 +130,8 @@ export function ContentManager({ type }: { type: "pages" | "posts" }) {
   async function remove() {
     if (!deleteTarget) return;
     try {
-      await apiFetch(`/api/v1/${type}/${deleteTarget.slug}/`, {
+      const endpoint = await getAdminResourceEndpoint(moduleKey, type);
+      await apiFetch(adminModulePath(endpoint, deleteTarget.slug), {
         method: "DELETE",
       });
       setItems((current) =>
