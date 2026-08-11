@@ -1,330 +1,83 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { LoaderCircle, Plus, ShieldX, Trash2, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { ColumnDef } from "@tanstack/react-table";
+import { LoaderCircle, MoreHorizontal, Plus, ShieldX, Trash2, UserCheck, UserRoundCog, UserX } from "lucide-react";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
+import { ConfirmDialog } from "@/components/admin/confirm-dialog";
+import { DataTable, SortableHeader } from "@/components/admin/data-table";
+import { StatusBadge } from "@/components/admin/status-badge";
 import { PageHeading } from "@/components/admin-shell/page-heading";
 import { useAuth } from "@/components/providers/app-providers";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api-client";
 import { roleLabel } from "@/lib/auth";
 import type { Paginated, Role, TenantMember } from "@/lib/types";
+
+const inviteSchema = z.object({ email: z.email("Enter a valid email address."), role: z.enum(["viewer", "editor", "super_admin"]) });
+type InviteForm = z.infer<typeof inviteSchema>;
 
 export default function MembersPage() {
   const { role } = useAuth();
   const [members, setMembers] = useState<TenantMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const [memberRole, setMemberRole] = useState<Role>("editor");
-  const [saving, setSaving] = useState(false);
   const [updating, setUpdating] = useState<string>();
   const [removeTarget, setRemoveTarget] = useState<TenantMember>();
   const canManage = role === "super_admin";
+  const form = useForm<InviteForm>({ resolver: zodResolver(inviteSchema), defaultValues: { email: "", role: "editor" } });
 
   const load = useCallback(async () => {
-    if (!canManage) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const value = await apiFetch<Paginated<TenantMember> | TenantMember[]>(
-        "/api/v1/admin/members/?ordering=email",
-      );
-      setMembers(Array.isArray(value) ? value : value.results);
-    } catch (cause) {
-      toast.error(
-        cause instanceof Error ? cause.message : "Members could not be loaded.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    if (!canManage) { setLoading(false); return; }
+    setLoading(true); setError(null);
+    try { const value = await apiFetch<Paginated<TenantMember> | TenantMember[]>("/api/v1/admin/members/?ordering=email"); setMembers(Array.isArray(value) ? value : value.results); }
+    catch (cause) { const message = cause instanceof Error ? cause.message : "Members could not be loaded."; setError(message); toast.error(message); }
+    finally { setLoading(false); }
   }, [canManage]);
+  useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  async function invite(event: React.FormEvent) {
-    event.preventDefault();
-    setSaving(true);
-    try {
-      const member = await apiFetch<TenantMember>("/api/v1/admin/members/", {
-        method: "POST",
-        body: JSON.stringify({ email, role: memberRole, is_active: true }),
-      });
-      setMembers((current) =>
-        [...current, member].sort((a, b) => a.email.localeCompare(b.email)),
-      );
-      setOpen(false);
-      setEmail("");
-      setMemberRole("editor");
-      toast.success(`Access email sent to ${member.email}`);
-    } catch (cause) {
-      toast.error(
-        cause instanceof Error
-          ? cause.message
-          : "The invitation could not be sent.",
-      );
-    } finally {
-      setSaving(false);
-    }
+  async function invite(values: InviteForm) {
+    try { const member = await apiFetch<TenantMember>("/api/v1/admin/members/", { method: "POST", body: JSON.stringify({ ...values, is_active: true }) }); setMembers((current) => [...current, member].sort((a, b) => a.email.localeCompare(b.email))); setOpen(false); form.reset(); toast.success(`Access email sent to ${member.email}`); }
+    catch (cause) { toast.error(cause instanceof Error ? cause.message : "The invitation could not be sent."); }
   }
-
   async function remove(member: TenantMember) {
-    try {
-      await apiFetch(`/api/v1/admin/members/${member.id}/`, {
-        method: "DELETE",
-      });
-      setMembers((current) => current.filter((item) => item.id !== member.id));
-      setRemoveTarget(undefined);
-      toast.success(`${member.email} was removed`);
-    } catch (cause) {
-      toast.error(
-        cause instanceof Error
-          ? cause.message
-          : "The member could not be removed.",
-      );
-    }
-  }
-
-  async function updateMember(
-    member: TenantMember,
-    changes: Partial<TenantMember>,
-  ) {
     setUpdating(String(member.id));
-    try {
-      const updated = await apiFetch<TenantMember>(
-        `/api/v1/admin/members/${member.id}/`,
-        { method: "PATCH", body: JSON.stringify(changes) },
-      );
-      setMembers((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
-      toast.success(`${updated.email} updated`);
-    } catch (cause) {
-      toast.error(
-        cause instanceof Error
-          ? cause.message
-          : "The member could not be updated.",
-      );
-    } finally {
-      setUpdating(undefined);
-    }
+    try { await apiFetch(`/api/v1/admin/members/${member.id}/`, { method: "DELETE" }); setMembers((current) => current.filter((item) => item.id !== member.id)); setRemoveTarget(undefined); toast.success(`${member.email} was removed`); }
+    catch (cause) { toast.error(cause instanceof Error ? cause.message : "The member could not be removed."); }
+    finally { setUpdating(undefined); }
+  }
+  async function updateMember(member: TenantMember, changes: Partial<TenantMember>) {
+    setUpdating(String(member.id));
+    try { const updated = await apiFetch<TenantMember>(`/api/v1/admin/members/${member.id}/`, { method: "PATCH", body: JSON.stringify(changes) }); setMembers((current) => current.map((item) => item.id === updated.id ? updated : item)); toast.success(`${updated.email} updated`); }
+    catch (cause) { toast.error(cause instanceof Error ? cause.message : "The member could not be updated."); }
+    finally { setUpdating(undefined); }
   }
 
-  if (!canManage) {
-    return (
-      <>
-        <PageHeading
-          title="Members"
-        />
-        <Card>
-          <EmptyState
-            icon={ShieldX}
-            title="Super Admin access required"
-            description="You can continue reviewing content, but you cannot view employee accounts or change workspace roles."
-          />
-        </Card>
-      </>
-    );
-  }
+  const columns = useMemo<ColumnDef<TenantMember>[]>(() => [
+    { accessorKey: "email", header: ({ column }) => <SortableHeader column={column}>Email</SortableHeader>, cell: ({ row }) => <div><p className="text-sm font-medium">{row.original.email}</p><p className="mt-0.5 text-xs text-muted-foreground">Employee account</p></div> },
+    { accessorKey: "role", header: "Role", cell: ({ row }) => <span className="text-sm text-muted-foreground">{roleLabel[row.original.role]}</span> },
+    { accessorKey: "is_active", header: "Status", cell: ({ row }) => <StatusBadge value={row.original.is_active ? "active" : "inactive"} /> },
+    { id: "actions", enableHiding: false, header: () => <span className="sr-only">Actions</span>, cell: ({ row }) => <div className="flex justify-end"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8" disabled={updating === String(row.original.id)} aria-label={`Actions for ${row.original.email}`}>{updating === String(row.original.id) ? <LoaderCircle className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}</Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-52"><DropdownMenuLabel>Change role</DropdownMenuLabel>{(["viewer", "editor", "super_admin"] as Role[]).map((nextRole) => <DropdownMenuItem key={nextRole} disabled={row.original.role === nextRole} onSelect={() => void updateMember(row.original, { role: nextRole })}><UserRoundCog />{roleLabel[nextRole]}</DropdownMenuItem>)}<DropdownMenuSeparator /><DropdownMenuItem onSelect={() => void updateMember(row.original, { is_active: !row.original.is_active })}>{row.original.is_active ? <UserX /> : <UserCheck />}{row.original.is_active ? "Deactivate" : "Activate"}</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => setRemoveTarget(row.original)}><Trash2 />Remove access</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div> },
+  ], [updating]);
+  const visibleMembers = useMemo(() => { const query = search.trim().toLowerCase(); return query ? members.filter((member) => member.email.toLowerCase().includes(query) || roleLabel[member.role].toLowerCase().includes(query)) : members; }, [members, search]);
 
-  return (
-    <>
-      <PageHeading
-        title="Members"
-        actions={
-          canManage ? (
-            <Button onClick={() => setOpen(true)}>
-              <Plus className="size-4" />
-              Invite employee
-            </Button>
-          ) : undefined
-        }
-      />
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="grid min-h-56 place-items-center">
-              <LoaderCircle className="size-6 animate-spin text-primary" />
-            </div>
-          ) : members.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              title="No members yet"
-              description="Invite the first employee to this workspace."
-              action={canManage ? "Invite employee" : undefined}
-              onAction={() => setOpen(true)}
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-155 text-left">
-                <thead>
-                  <tr className="border-b bg-neutral-50/70 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    <th className="px-5 py-3">Email</th>
-                    <th className="px-5 py-3">Role</th>
-                    <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {members.map((member) => (
-                    <tr key={member.id}>
-                      <td className="px-5 py-4 font-medium">{member.email}</td>
-                      <td className="px-5 py-4 text-sm text-muted-foreground">
-                        {canManage ? (
-                          <select
-                            className="h-9 rounded-lg border bg-card px-2 text-sm"
-                            value={member.role}
-                            disabled={updating === String(member.id)}
-                            onChange={(event) =>
-                              updateMember(member, {
-                                role: event.target.value as Role,
-                              })
-                            }
-                            aria-label={`Role for ${member.email}`}
-                          >
-                            <option value="viewer">Viewer</option>
-                            <option value="editor">Editor</option>
-                            <option value="super_admin">Super Admin</option>
-                          </select>
-                        ) : (
-                          roleLabel[member.role]
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        {canManage ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={updating === String(member.id)}
-                            onClick={() =>
-                              updateMember(member, {
-                                is_active: !member.is_active,
-                              })
-                            }
-                          >
-                            {updating === String(member.id) && (
-                              <LoaderCircle className="size-3.5 animate-spin" />
-                            )}
-                            <Badge
-                              variant={member.is_active ? "success" : "warning"}
-                            >
-                              {member.is_active ? "Active" : "Inactive"}
-                            </Badge>
-                          </Button>
-                        ) : (
-                          <Badge
-                            variant={member.is_active ? "success" : "warning"}
-                          >
-                            {member.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        {canManage && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setRemoveTarget(member)}
-                            aria-label={`Remove ${member.email}`}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>Invite employee</DialogTitle>
-          <DialogDescription>
-            They will receive an email to create a password or use their
-            existing CMS account.
-          </DialogDescription>
-          <form onSubmit={invite} className="mt-6 space-y-5">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Email address
-              </span>
-              <Input
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">Role</span>
-              <select
-                className="h-10 w-full rounded-lg border bg-card px-3 text-sm"
-                value={memberRole}
-                onChange={(event) => setMemberRole(event.target.value as Role)}
-              >
-                <option value="editor">Editor</option>
-                <option value="viewer">Viewer</option>
-                <option value="super_admin">Super Admin</option>
-              </select>
-            </label>
-            <div className="flex justify-end gap-2 border-t pt-5">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving && <LoaderCircle className="size-4 animate-spin" />}Send
-                access email
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={Boolean(removeTarget)}
-        onOpenChange={(nextOpen) => !nextOpen && setRemoveTarget(undefined)}
-      >
-        <DialogContent className="max-w-md">
-          <DialogTitle>Remove employee access?</DialogTitle>
-          <DialogDescription>
-            {removeTarget?.email} will no longer be able to access this workspace. Their account is not deleted.
-          </DialogDescription>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setRemoveTarget(undefined)}>
-              Keep access
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => removeTarget && void remove(removeTarget)}
-            >
-              <Trash2 className="size-4" /> Remove access
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+  if (!canManage) return <><PageHeading title="Members" description="Manage employee access and workspace roles." /><div className="rounded-lg border bg-card"><EmptyState icon={ShieldX} title="Super Admin access required" description="You can continue reviewing content, but only Super Admins can view employee accounts or change workspace roles." /></div></>;
+
+  return <>
+    <PageHeading title="Members" description="Invite employees, assign roles, and control workspace access." actions={<Button onClick={() => setOpen(true)}><Plus className="size-4" />Invite employee</Button>} />
+    <DataTable data={visibleMembers} columns={columns} loading={loading} error={error} onRetry={() => void load()} searchValue={search} onSearchChange={setSearch} searchPlaceholder="Search members…" emptyTitle={search ? "No matching members" : "No members yet"} emptyDescription={search ? "Try a different email address or role." : "Invite the first employee to this workspace."} emptyAction={!search ? "Invite employee" : undefined} onEmptyAction={() => setOpen(true)} getRowId={(member) => String(member.id)} />
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-md"><DialogTitle>Invite employee</DialogTitle><DialogDescription>They will receive an email to create a password or use their existing CMS account.</DialogDescription><form onSubmit={form.handleSubmit(invite)} className="mt-5 space-y-4"><div><Label htmlFor="invite-email">Email address</Label><Input id="invite-email" className="mt-1.5" type="email" autoComplete="email" {...form.register("email")} />{form.formState.errors.email ? <p className="mt-1 text-xs text-destructive">{form.formState.errors.email.message}</p> : null}</div><Controller name="role" control={form.control} render={({ field }) => <div><Label>Role</Label><Select value={field.value} onValueChange={field.onChange}><SelectTrigger className="mt-1.5 w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="editor">Editor</SelectItem><SelectItem value="viewer">Viewer</SelectItem><SelectItem value="super_admin">Super Admin</SelectItem></SelectContent></Select></div>} /><div className="flex justify-end gap-2 border-t pt-4"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={form.formState.isSubmitting}>{form.formState.isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}Send access email</Button></div></form></DialogContent></Dialog>
+    <ConfirmDialog open={Boolean(removeTarget)} onOpenChange={(nextOpen) => !nextOpen && setRemoveTarget(undefined)} title="Remove employee access?" description={`${removeTarget?.email ?? "This employee"} will no longer be able to access this workspace. Their account is not deleted.`} confirmLabel="Remove access" onConfirm={() => removeTarget && void remove(removeTarget)} pending={Boolean(removeTarget && updating === String(removeTarget.id))} />
+  </>;
 }

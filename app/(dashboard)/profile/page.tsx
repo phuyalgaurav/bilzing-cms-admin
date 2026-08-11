@@ -5,7 +5,7 @@ import { PageHeading } from "@/components/admin-shell/page-heading";
 import { useAuth, useTenant } from "@/components/providers/app-providers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { roleLabel } from "@/lib/auth";
 
 export default function ProfilePage() {
@@ -15,13 +15,10 @@ export default function ProfilePage() {
   return (
     <>
       <PageHeading title="Account" />
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Access</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-4">
+      <Card className="max-w-3xl">
+        <div className="grid gap-4 border-b p-5 sm:grid-cols-[180px_minmax(0,1fr)]">
+          <div><h2 className="text-sm font-semibold">Access</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Your permissions in this workspace.</p></div>
+          <div className="flex items-center gap-3">
               <div className="grid size-11 place-items-center rounded-full bg-neutral-900 text-white">
                 <UserRound className="size-5" />
               </div>
@@ -31,33 +28,28 @@ export default function ProfilePage() {
                   {role ? roleLabel[role] : "Member"}
                 </Badge>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Workspace</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between gap-4">
+          </div>
+        </div>
+        <div className="grid gap-4 border-b p-5 sm:grid-cols-[180px_minmax(0,1fr)]">
+          <div><h2 className="text-sm font-semibold">Workspace</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Refresh the active workspace configuration.</p></div>
+          <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-medium">{config.name}</p>
             <Button variant="outline" onClick={() => refresh()} disabled={loading}>
               <RefreshCw className={loading ? "size-4 animate-spin" : "size-4"} />
               Refresh
             </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardContent className="flex items-center justify-between gap-4 p-5">
-            <p className="font-medium">Sign out</p>
+          </div>
+        </div>
+        <div className="grid gap-4 p-5 sm:grid-cols-[180px_minmax(0,1fr)]">
+          <div><h2 className="text-sm font-semibold">Session</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">End your current admin session.</p></div>
+          <div className="flex justify-end">
             <Button variant="outline" onClick={logout}>
               <LogOut className="size-4" />
               Sign out
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </Card>
     </>
   );
 }

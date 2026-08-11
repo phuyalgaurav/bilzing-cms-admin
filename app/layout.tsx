@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { AppProviders } from "@/components/providers/app-providers";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
@@ -15,10 +16,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${sans.variable} ${mono.variable}`}>
-        <AppProviders>{children}</AppProviders>
-        <Toaster position="bottom-right" richColors closeButton />
+    <html lang="en" suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
+      <body>
+        <TooltipProvider delayDuration={250}>
+          <AppProviders>{children}</AppProviders>
+        </TooltipProvider>
+        <Toaster position="bottom-right" closeButton toastOptions={{ className: "text-sm" }} />
       </body>
     </html>
   );

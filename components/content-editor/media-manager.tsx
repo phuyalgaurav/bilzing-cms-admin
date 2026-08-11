@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   FileImage,
   ImagePlus,
   LoaderCircle,
+  MoreHorizontal,
   Pencil,
   Search,
   Trash2,
@@ -30,6 +31,9 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Textarea } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmDialog } from "@/components/admin/confirm-dialog";
+import { ErrorState } from "@/components/admin/error-state";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const imagePattern = /\.(avif|gif|jpe?g|png|svg|webp)(\?.*)?$/i;
 
@@ -48,6 +52,8 @@ export function MediaManager() {
   const [deleteTarget, setDeleteTarget] = useState<MediaRecord>();
   const [metadataText, setMetadataText] = useState("{}");
   const [saving, setSaving] = useState(false);
+  const pendingPreview = useMemo(() => pendingFile?.type.startsWith("image/") ? URL.createObjectURL(pendingFile) : "", [pendingFile]);
+  useEffect(() => () => { if (pendingPreview) URL.revokeObjectURL(pendingPreview); }, [pendingPreview]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -228,15 +234,7 @@ export function MediaManager() {
               ))}
             </div>
           ) : error ? (
-            <div className="grid min-h-64 place-items-center text-center">
-              <div>
-                <p className="font-medium">Couldn’t load media</p>
-                <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-                <Button variant="outline" className="mt-4" onClick={load}>
-                  Try again
-                </Button>
-              </div>
-            </div>
+            <ErrorState title="Couldn’t load media" description={error} retry={() => void load()} />
           ) : items.length === 0 ? (
             <EmptyState
               icon={ImagePlus}
@@ -247,13 +245,14 @@ export function MediaManager() {
             />
           ) : (
             <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {items.map((item) => {
+              {items.map((item, index) => {
                 const src = resolveMediaUrl(item.file ?? item.url);
-                const isImage = Boolean(src && imagePattern.test(src));
+                const contentType = typeof item.metadata?.content_type === "string" ? item.metadata.content_type : "";
+                const isImage = Boolean(src && (contentType.startsWith("image/") || imagePattern.test(src)));
                 return (
                   <div
                     key={item.id}
-                    className="group overflow-hidden rounded-xl border bg-card"
+                    className="group overflow-hidden rounded-lg border bg-card"
                   >
                     <div className="relative aspect-square bg-muted">
                       {src && isImage ? (
@@ -262,36 +261,14 @@ export function MediaManager() {
                           alt={item.alt_text || item.title}
                           fill
                           sizes="(max-width: 640px) 50vw, 20vw"
+                          loading={index < 2 ? "eager" : "lazy"}
                           unoptimized
                           className="object-cover"
                         />
                       ) : (
                         <FileImage className="absolute left-1/2 top-1/2 size-8 -translate-x-1/2 -translate-y-1/2 text-muted-foreground" />
                       )}
-                      <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                        {canEdit(role) && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="size-8 bg-card"
-                            onClick={() => openEdit(item)}
-                            aria-label={`Edit ${item.title}`}
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                        )}
-                        {canDelete(role) && (
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="size-8"
-                            onClick={() => setDeleteTarget(item)}
-                            aria-label={`Delete ${item.title}`}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        )}
-                      </div>
+                      <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="size-8 bg-card" aria-label={`Actions for ${item.title}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">{canEdit(role) ? <DropdownMenuItem onSelect={() => openEdit(item)}><Pencil />Edit details</DropdownMenuItem> : null}{canDelete(role) ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(item)}><Trash2 />Delete</DropdownMenuItem></> : null}</DropdownMenuContent></DropdownMenu></div>
                     </div>
                     <div className="p-3">
                       <p className="truncate text-sm font-medium">
@@ -326,7 +303,7 @@ export function MediaManager() {
                 void upload();
               }}
             >
-              <p className="text-sm text-muted-foreground">{pendingFile.name}</p>
+              {pendingPreview ? <div className="relative aspect-video overflow-hidden rounded-md border bg-muted"><Image src={pendingPreview} alt="Selected upload preview" fill unoptimized className="object-contain" /></div> : <div className="flex items-center gap-3 rounded-md border bg-muted/40 p-3"><FileImage className="size-5 text-muted-foreground" /><p className="truncate text-sm">{pendingFile.name}</p></div>}
               <label className="block">
                 <span className="mb-2 block text-sm font-medium">Name</span>
                 <Input value={uploadTitle} onChange={(event) => setUploadTitle(event.target.value)} />
@@ -357,6 +334,7 @@ export function MediaManager() {
           </DialogDescription>
           {editor && (
             <form onSubmit={save} className="mt-6 space-y-4">
+              {resolveMediaUrl(editor.file ?? editor.url) && imagePattern.test(resolveMediaUrl(editor.file ?? editor.url)) ? <div className="relative aspect-video overflow-hidden rounded-md border bg-muted"><Image src={resolveMediaUrl(editor.file ?? editor.url)} alt={editor.alt_text || editor.title} fill unoptimized className="object-contain" /></div> : null}
               <label className="block">
                 <span className="mb-2 block text-sm font-medium">Title</span>
                 <Input
@@ -377,14 +355,7 @@ export function MediaManager() {
                   }
                 />
               </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium">Metadata</span>
-                <Textarea
-                  className="min-h-36 font-mono text-xs"
-                  value={metadataText}
-                  onChange={(event) => setMetadataText(event.target.value)}
-                />
-              </label>
+              <details className="rounded-md border"><summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">Advanced file metadata</summary><div className="border-t p-3"><p className="mb-2 text-xs text-muted-foreground">Technical metadata is normally managed automatically.</p><Textarea className="min-h-36 font-mono text-xs" value={metadataText} onChange={(event) => setMetadataText(event.target.value)} aria-label="Advanced file metadata" /></div></details>
               <div className="flex justify-end gap-2 border-t pt-5">
                 <Button
                   type="button"
@@ -402,18 +373,7 @@ export function MediaManager() {
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(undefined)}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>Delete media?</DialogTitle>
-          <DialogDescription>
-            This permanently removes {deleteTarget?.title || "this file"} and its stored file.
-          </DialogDescription>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDeleteTarget(undefined)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleteTarget && void remove(deleteTarget)}>Delete media</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(undefined)} title="Delete media?" description={`This permanently removes ${deleteTarget?.title || "this file"} and its stored file.`} confirmLabel="Delete media" onConfirm={() => deleteTarget && void remove(deleteTarget)} />
     </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -22,8 +23,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { moduleExperience, modulePrimaryPath } from "@/lib/module-experience";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+
+const ContentOverviewChart = dynamic(
+  () => import("@/components/admin/content-overview-chart").then((module) => module.ContentOverviewChart),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full" /> },
+);
 
 const resources = [
   {
@@ -89,6 +97,7 @@ export default function DashboardPage() {
   const [error, setError] = useState(false);
   const [customizing, setCustomizing] = useState(false);
   const [widgets, setWidgets] = useState({ stats: true, tools: true, recent: true });
+  const chartData = activeResources.map(({ label }) => ({ name: label, records: stats[label] ?? 0 }));
 
   useEffect(() => {
     const saved = window.localStorage.getItem(`cms-dashboard:${config.tenant_key}`);
@@ -155,16 +164,15 @@ export default function DashboardPage() {
             <Button variant="outline" size="icon" onClick={() => setCustomizing(true)} aria-label="Customize dashboard">
               <Settings2 className="size-4" />
             </Button>
-            {mayEdit ? <Link href="/pages?new=true" className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm hover:brightness-95"><Plus className="size-4" />New page</Link> : null}
+            {mayEdit ? <Link href="/pages?new=true" className={cn(buttonVariants(), "h-9")}><Plus className="size-4" />New page</Link> : null}
           </>
         }
       />
-      {widgets.stats ? <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      {widgets.stats ? <section className="grid overflow-hidden rounded-lg border bg-card sm:grid-cols-2 xl:grid-cols-4">
         {activeResources.map(({ label, href, icon: Icon }) => (
-          <Link key={label} href={href}>
-            <Card className="group h-full hover:border-primary/30">
-              <CardContent className="flex items-center gap-3 p-4">
-                <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/8 text-primary">
+          <Link key={label} href={href} className="group border-b p-4 last:border-b-0 sm:border-r xl:border-b-0 xl:last:border-r-0">
+              <div className="flex items-center gap-3">
+                <div className="grid size-8 shrink-0 place-items-center rounded-md bg-primary/8 text-primary">
                   <Icon className="size-4" />
                 </div>
                 <div>
@@ -172,14 +180,13 @@ export default function DashboardPage() {
                   {loading ? (
                     <Skeleton className="mt-1 h-7 w-10" />
                   ) : (
-                    <p className="text-lg font-semibold">
+                    <p className="text-xl font-semibold tabular-nums">
                       {stats[label] ?? "—"}
                     </p>
                   )}
                 </div>
                 <ArrowRight className="ml-auto hidden size-4 text-muted-foreground group-hover:text-primary sm:block" />
-              </CardContent>
-            </Card>
+              </div>
           </Link>
         ))}
       </section> : null}
@@ -216,8 +223,12 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
-      {widgets.recent ? <section className="mt-6">
-        <Card>
+      {widgets.recent ? <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        {chartData.length > 1 ? <Card>
+          <CardHeader><CardTitle>Content overview</CardTitle><p className="text-sm text-muted-foreground">Records across your website tools.</p></CardHeader>
+          <CardContent className="h-64 pl-0"><ContentOverviewChart data={chartData} /></CardContent>
+        </Card> : null}
+        <Card className={chartData.length <= 1 ? "lg:col-span-2" : undefined}>
           <CardHeader className="flex-row items-center justify-between">
             <div>
               <CardTitle>Recently updated</CardTitle>
@@ -287,8 +298,8 @@ export default function DashboardPage() {
           <DialogDescription>Choose the sections you want to see. Your layout is saved for this workspace in this browser.</DialogDescription>
           <div className="mt-6 space-y-3">
             {([['stats', 'Content overview'], ['tools', 'Workspace tools'], ['recent', 'Recently updated']] as const).map(([key, label]) => (
-              <label key={key} className="flex items-center justify-between rounded-lg border px-3 py-3 text-sm font-medium">
-                {label}<input type="checkbox" checked={widgets[key]} onChange={(event) => updateWidget(key, event.target.checked)} className="size-4 accent-primary" />
+              <label key={key} className="flex items-center justify-between rounded-md border px-3 py-3 text-sm font-medium">
+                {label}<Checkbox checked={widgets[key]} onCheckedChange={(checked) => updateWidget(key, Boolean(checked))} />
               </label>
             ))}
           </div>

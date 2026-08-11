@@ -6,6 +6,7 @@ import {
   ArrowUp,
   LayoutTemplate,
   LoaderCircle,
+  MoreHorizontal,
   Pencil,
   Plus,
   Trash2,
@@ -29,6 +30,9 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmDialog } from "@/components/admin/confirm-dialog";
+import { ErrorState } from "@/components/admin/error-state";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export function NavigationManager() {
   const { role } = useAuth();
@@ -38,6 +42,8 @@ export function NavigationManager() {
   const [original, setOriginal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<NavigationRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const load = () => {
     setLoading(true);
     getAdminResourceEndpoint("website_pages", "navigations")
@@ -47,7 +53,8 @@ export function NavigationManager() {
         ),
       )
       .then((value) => {
-        setItems(Array.isArray(value) ? value : value.results);
+        const records = Array.isArray(value) ? value : value.results;
+        setItems(records.map((record) => ({ ...record, items: record.items ?? [] })));
         setError("");
       })
       .catch((e) => setError(e.message))
@@ -82,15 +89,16 @@ export function NavigationManager() {
     }
   }
   async function remove(item: NavigationRecord) {
-    if (!confirm(`Delete “${item.name}”?`)) return;
+    setDeleting(true);
     try {
       const endpoint = await getAdminResourceEndpoint("website_pages", "navigations");
       await apiFetch(adminModulePath(endpoint, item.slug), { method: "DELETE" });
       setItems((current) => current.filter((x) => x.slug !== item.slug));
+      setDeleteTarget(null);
       toast.success("Navigation deleted");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
-    }
+    } finally { setDeleting(false); }
   }
   return (
     <>
@@ -116,15 +124,7 @@ export function NavigationManager() {
               ))}
             </div>
           ) : error ? (
-            <div className="grid min-h-64 place-items-center text-center">
-              <div>
-                <p className="font-medium">Couldn’t load navigation</p>
-                <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-                <Button variant="outline" className="mt-4" onClick={load}>
-                  Try again
-                </Button>
-              </div>
-            </div>
+            <ErrorState title="Couldn’t load navigation" description={error} retry={load} />
           ) : items.length === 0 ? (
             <EmptyState
               icon={LayoutTemplate}
@@ -143,32 +143,10 @@ export function NavigationManager() {
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{item.name}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {item.items.length} links · {item.slug}
+                      {(item.items ?? []).length} links · {item.slug}
                     </p>
                   </div>
-                  {canEdit(role) && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setOriginal(item.slug);
-                        setEditor(item);
-                      }}
-                      aria-label={`Edit ${item.name}`}
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                  )}
-                  {canDelete(role) && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => remove(item)}
-                      aria-label={`Delete ${item.name}`}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  )}
+                  <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8" aria-label={`Actions for ${item.name}`}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">{canEdit(role) ? <DropdownMenuItem onSelect={() => { setOriginal(item.slug); setEditor({ ...item, items: item.items ?? [] }); }}><Pencil />Edit</DropdownMenuItem> : null}{canDelete(role) ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => setDeleteTarget(item)}><Trash2 />Delete</DropdownMenuItem></> : null}</DropdownMenuContent></DropdownMenu>
                 </div>
               ))}
             </div>
@@ -336,6 +314,7 @@ export function NavigationManager() {
           )}
         </DialogContent>
       </Dialog>
+      <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)} title={`Delete “${deleteTarget?.name ?? "menu"}”?`} description="This permanently removes the menu and its links. This action cannot be undone." confirmLabel="Delete menu" onConfirm={() => deleteTarget && void remove(deleteTarget)} pending={deleting} />
     </>
   );
 }

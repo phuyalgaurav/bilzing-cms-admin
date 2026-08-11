@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { format } from "date-fns";
 import {
   CalendarDays,
   ChevronLeft,
@@ -14,6 +15,7 @@ import {
   LoaderCircle,
   Mail,
   MapPinned,
+  MoreHorizontal,
   Navigation,
   Pencil,
   Plus,
@@ -41,9 +43,8 @@ import type {
   ModuleResourceContract,
   ResourceField,
 } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Textarea } from "@/components/ui/input";
 import {
@@ -64,6 +65,24 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { StatusBadge } from "@/components/admin/status-badge";
+import { ConfirmDialog } from "@/components/admin/confirm-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ModuleRecordContext } from "@/components/module-record-context";
 import { LocationPicker } from "@/components/location/location-picker";
 import { resolveMediaUrl } from "@/lib/media-url";
@@ -75,7 +94,7 @@ import {
 
 const PAGE_SIZE = 15;
 const selectClass =
-  "h-10 w-full rounded-lg border border-neutral-300 bg-card px-3 text-sm shadow-[0_1px_1px_rgb(0_0_0/0.02)] transition-[border-color,box-shadow] duration-150 focus:border-primary focus:ring-3 focus:ring-primary/10";
+  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm transition-colors focus:border-primary focus:ring-2 focus:ring-primary/10";
 
 const label = (value: string) =>
   value
@@ -93,7 +112,7 @@ const formatRecordDate = (value: unknown) => {
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime())
     ? displayValue(value)
-    : parsed.toLocaleString();
+    : format(parsed, "MMM d, yyyy, h:mm a");
 };
 
 type LocationValues = Record<string, unknown>;
@@ -815,43 +834,40 @@ export default function ModuleResourcePage({
         </Card>
       )}
 
-      <Dialog
+      <Sheet
         open={editorOpen}
         onOpenChange={(open) => {
           if (!saving) setEditorOpen(open);
         }}
       >
-        <DialogContent className="!inset-y-0 !right-0 !left-auto !top-0 !h-dvh !max-h-none !w-full !max-w-3xl !translate-x-0 !translate-y-0 overflow-hidden !rounded-none border-y-0 border-r-0 p-0">
-          <Card className="flex h-dvh flex-col overflow-hidden border-0 shadow-none">
-            <CardHeader className="shrink-0 border-b bg-card px-6 py-5 pr-16">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-                {editing ? "Edit" : "New"} {moduleUX?.label ?? "record"}
-              </p>
-              <DialogTitle className="mt-1 text-xl">
+        <SheetContent className="w-full gap-0 overflow-hidden p-0 sm:max-w-3xl" showCloseButton={!saving}>
+          <div className="flex h-dvh flex-col overflow-hidden">
+            <SheetHeader className="shrink-0 border-b bg-card px-5 py-4 pr-14 sm:px-6">
+              <SheetTitle className="text-lg">
                 {editing
                   ? editing.title || editing.slug
-                  : titleCase(resourceUX?.singular ?? "record")}
-              </DialogTitle>
-              <DialogDescription className="mt-1 max-w-xl">
+                  : `New ${titleCase(resourceUX?.singular ?? "record")}`}
+              </SheetTitle>
+              <SheetDescription className="max-w-xl">
                 {resourceUX?.description ??
                   (editing ? "Update this record." : "Add the details below.")}
-              </DialogDescription>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-0">
+              </SheetDescription>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto">
               <form
                 onSubmit={(event) => save(event)}
                 className="flex min-h-full flex-col"
               >
-                <div className="flex-1 space-y-4 bg-neutral-50/70 p-4 sm:p-6">
+                <div className="flex-1 px-5 sm:px-6">
                 {keys?.moduleKey === "seo_management" && keys.resourceKey ? (
                   <SeoEditorPreview resourceKey={keys.resourceKey} values={data} />
                 ) : null}
                 {generalFieldGroups.map((group, groupIndex) => (
                   <section
                     key={group.section}
-                    className="rounded-xl border bg-card p-4 sm:p-5"
+                    className="grid gap-4 border-b py-5 md:grid-cols-[160px_minmax(0,1fr)]"
                   >
-                    <div className="mb-4">
+                    <div>
                       <h3 className="text-sm font-semibold">{group.section}</h3>
                       {groupIndex === 0 ? (
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -859,7 +875,7 @@ export default function ModuleResourcePage({
                         </p>
                       ) : null}
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                       {group.fields.map((field) => (
                         <ResourceInput
                           key={field.key}
@@ -903,14 +919,14 @@ export default function ModuleResourcePage({
                   )}
 
                 {!!mediaFields.length && (
-                  <section className="rounded-xl border bg-card p-4 sm:p-5">
-                    <div className="mb-4">
+                  <section className="grid gap-4 border-b py-5 md:grid-cols-[160px_minmax(0,1fr)]">
+                    <div>
                       <h3 className="text-sm font-semibold">Images</h3>
                       <p className="mt-1 text-xs text-muted-foreground">
                         Choose clear, high-quality images from the shared media library.
                       </p>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                       {mediaFields.map((field) => (
                         <ResourceInput
                           key={field.key}
@@ -931,13 +947,13 @@ export default function ModuleResourcePage({
                 )}
 
                 {!!structuredFields.length && (
-                  <section className="rounded-xl border bg-card p-4 sm:p-5">
-                    <h3 className="mb-4 text-sm font-semibold">
+                  <section className="grid gap-4 border-b py-5 md:grid-cols-[160px_minmax(0,1fr)]">
+                    <h3 className="text-sm font-semibold">
                       {keys?.moduleKey === "seo_management" && keys.resourceKey === "schema"
                         ? "Structured data details"
                         : "Additional details"}
                     </h3>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                       {structuredFields.map((field) =>
                         keys?.moduleKey === "seo_management" &&
                         keys.resourceKey === "schema" &&
@@ -997,24 +1013,21 @@ export default function ModuleResourcePage({
                 )}
 
                 {resource?.public_read && (
-                  <section className="rounded-xl border bg-card p-4 sm:p-5">
-                    <h3 className="mb-4 text-sm font-semibold">Publishing</h3>
-                    <div className="grid gap-5 sm:grid-cols-2">
+                  <section className="grid gap-4 py-5 md:grid-cols-[160px_minmax(0,1fr)]">
+                    <div><h3 className="text-sm font-semibold">Publishing</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Control when this record appears on the website.</p></div>
+                    <div className="grid min-w-0 gap-5 sm:grid-cols-2">
                       <FieldLabel label="Publishing status">
-                        <select
-                          className={selectClass}
+                        <Select
                           value={form.status}
-                          onChange={(event) =>
+                          onValueChange={(value) =>
                             setForm((current) => ({
                               ...current,
-                              status: event.target.value as ModuleRecordStatus,
+                              status: value as ModuleRecordStatus,
                             }))
                           }
                         >
-                          <option value="draft">Draft</option>
-                          <option value="published">Published</option>
-                          <option value="archived">Archived</option>
-                        </select>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="published">Published</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent>
+                        </Select>
                       </FieldLabel>
                       <div className="sm:col-span-2">
                         <details className="rounded-lg border bg-neutral-50/60">
@@ -1028,9 +1041,9 @@ export default function ModuleResourcePage({
                             >
                               <div className="flex overflow-hidden rounded-lg border border-neutral-300 bg-card focus-within:border-primary focus-within:ring-3 focus-within:ring-primary/10">
                                 <span className="grid place-items-center border-r bg-neutral-50 px-3 text-sm text-muted-foreground">/</span>
-                                <input
+                                <Input
                                   aria-label="Public URL ending"
-                                  className="h-10 min-w-0 flex-1 bg-transparent px-3 text-sm"
+                                  className="min-w-0 flex-1 rounded-none border-0 bg-transparent focus:ring-0"
                                   value={form.slug}
                                   placeholder="created-automatically"
                                   onChange={(event) =>
@@ -1107,10 +1120,10 @@ export default function ModuleResourcePage({
                   </div>
                 </div>
               </form>
-            </CardContent>
-          </Card>
-        </DialogContent>
-      </Dialog>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <QuickCreateRelatedDialog
         request={relatedCreate}
@@ -1118,72 +1131,41 @@ export default function ModuleResourcePage({
         onCreated={useRelatedRecord}
       />
 
-      <Dialog
-        open={Boolean(deleteTarget)}
-        onOpenChange={(open) => !open && setDeleteTarget(undefined)}
-      >
-        <DialogContent className="max-w-md">
-          <DialogTitle>Delete {resourceUX?.singular ?? "record"}?</DialogTitle>
-          <DialogDescription>
-            {deleteTarget?.title || deleteTarget?.slug || "This record"} will be permanently removed. This cannot be undone.
-          </DialogDescription>
-          <div className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setDeleteTarget(undefined)}>
-              Keep it
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={Boolean(deleteTarget && busyRecord === String(deleteTarget.id))}
-              onClick={() => deleteTarget && void remove(deleteTarget)}
-            >
-              {deleteTarget && busyRecord === String(deleteTarget.id) ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <Trash2 className="size-4" />
-              )}
-              Delete permanently
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(undefined)} title={`Delete ${resourceUX?.singular ?? "record"}?`} description={`${deleteTarget?.title || deleteTarget?.slug || "This record"} will be permanently removed. This cannot be undone.`} confirmLabel="Delete permanently" onConfirm={() => deleteTarget && void remove(deleteTarget)} pending={Boolean(deleteTarget && busyRecord === String(deleteTarget.id))} />
 
       <Card>
         <CardContent className="p-0">
           {!!resource?.workflow?.length && (
             <div className="flex gap-2 overflow-x-auto border-b p-3">
-              <button
+              <Button
                 type="button"
+                variant={operationalFilter === "" ? "secondary" : "ghost"}
+                size="sm"
                 onClick={() => {
                   setOperationalFilter("");
                   setPage(1);
                 }}
-                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium ${
-                  operationalFilter === ""
-                    ? "bg-foreground text-background"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
-                }`}
+                className="whitespace-nowrap"
               >
                 All {resourceName.toLowerCase()}
-              </button>
+              </Button>
               {resource.workflow.map((state) => (
-                <button
+                <Button
                   key={state.value}
                   type="button"
+                  variant={operationalFilter === state.value ? "secondary" : "ghost"}
+                  size="sm"
                   onClick={() => {
                     setOperationalFilter(state.value);
                     setPage(1);
                   }}
-                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium ${
-                    operationalFilter === state.value
-                      ? "bg-foreground text-background"
-                      : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
+                  className="whitespace-nowrap"
                 >
                   {state.label}
                   <span className="ml-1.5 opacity-70">
                     {workflowCounts[state.value] ?? 0}
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -1201,35 +1183,27 @@ export default function ModuleResourcePage({
               />
             </div>
             {resource?.public_read && (
-                <select
-                  className={`${selectClass} lg:w-36`}
-                  value={statusFilter}
-                  onChange={(event) => {
-                    setStatusFilter(event.target.value);
+                <Select
+                  value={statusFilter || "all"}
+                  onValueChange={(value) => {
+                    setStatusFilter(value === "all" ? "" : value);
                     setPage(1);
                   }}
-                  aria-label="Filter by publishing status"
                 >
-                  <option value="">All statuses</option>
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="archived">Archived</option>
-                </select>
+                  <SelectTrigger className="w-full lg:w-40" aria-label="Filter by publishing status"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="published">Published</SelectItem><SelectItem value="archived">Archived</SelectItem></SelectContent>
+                </Select>
             )}
-            <select
-              className={`${selectClass} lg:w-44`}
+            <Select
               value={ordering}
-              onChange={(event) => {
-                setOrdering(event.target.value);
+              onValueChange={(value) => {
+                setOrdering(value);
                 setPage(1);
               }}
-              aria-label="Sort records"
             >
-              <option value="-updated_at">Recently updated</option>
-              <option value="-created_at">Newest first</option>
-              <option value="title">Title A–Z</option>
-              <option value="-title">Title Z–A</option>
-            </select>
+              <SelectTrigger className="w-full lg:w-44" aria-label="Sort records"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="-updated_at">Recently updated</SelectItem><SelectItem value="-created_at">Newest first</SelectItem><SelectItem value="title">Title A–Z</SelectItem><SelectItem value="-title">Title Z–A</SelectItem></SelectContent>
+            </Select>
             {(query ||
               statusFilter ||
               operationalFilter ||
@@ -1434,13 +1408,13 @@ const ResourceSummary = memo(function ResourceSummary({
   } else if (view === "catalog") {
     metrics.push(
       { label: "active", value: active },
-      {
-        label: "low stock",
-        value: states.filter((state) => state === "low_stock").length,
-        tone: "text-amber-700",
-      },
-      { label: "catalog value", value: totalValue.toLocaleString() },
     );
+    if (publicRead) {
+      metrics.push(
+        { label: "published", value: items.filter((item) => item.status === "published").length },
+        { label: "drafts", value: items.filter((item) => item.status === "draft").length },
+      );
+    }
   } else if (view === "calendar") {
     const today = new Date().toISOString().slice(0, 10);
     const dates = items.map((item) =>
@@ -1470,7 +1444,7 @@ const ResourceSummary = memo(function ResourceSummary({
     metrics.push({ label: "need attention", value: attention, tone: "text-amber-700" });
 
   return (
-    <section className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
+    <section className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-y bg-card px-4 py-3 text-sm text-muted-foreground sm:rounded-lg sm:border">
       {metrics.slice(0, 4).map((metric) => (
         <span key={metric.label} className={`whitespace-nowrap ${metric.tone ?? ""}`}>
           <strong className="font-semibold text-foreground">{metric.value}</strong>{" "}
@@ -1682,7 +1656,7 @@ function RecordTile(props: RecordPresentationProps) {
     .map((key) => item[key])
     .find((value) => typeof value === "string" && value);
   return (
-    <article className="overflow-hidden rounded-xl border bg-card transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-sm">
+    <article className="overflow-hidden rounded-lg border bg-card transition-colors hover:border-foreground/20">
       {view === "gallery" &&
         typeof imageValue === "string" && (
           <div className="relative aspect-video border-b bg-muted">
@@ -1697,14 +1671,15 @@ function RecordTile(props: RecordPresentationProps) {
           </div>
         )}
       <div className="p-4">
-        <button
+        <Button
           type="button"
+          variant="link"
           disabled={!mayEdit}
           onClick={() => onEdit(item)}
-          className="max-w-full truncate text-left font-semibold enabled:hover:text-primary disabled:cursor-default"
+          className="max-w-full justify-start truncate text-left font-semibold disabled:cursor-default"
         >
           {item.title || item.slug}
-        </button>
+        </Button>
         <RecordBadges item={item} publicRead={resource?.public_read} />
         <RecordFields item={item} fields={fields} relations={relations} />
         <div className="mt-4 border-t pt-3">
@@ -1755,14 +1730,15 @@ function RecordRow(props: RecordPresentationProps) {
           )}
         </div>
         <div className="min-w-0">
-          <button
+          <Button
             type="button"
+            variant="link"
             disabled={!mayEdit}
             onClick={() => onEdit(item)}
-            className="block max-w-full truncate text-left font-semibold enabled:hover:text-primary disabled:cursor-default"
+            className="block max-w-full truncate text-left font-semibold disabled:cursor-default"
           >
             {item.title || item.slug}
-          </button>
+          </Button>
           {view === "ledger" && amount != null ? (
             <p className="mt-1 text-lg font-semibold tabular-nums">
               {displayValue(amount)}
@@ -1843,22 +1819,10 @@ function RecordBadges({
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {typeof item.operational_status === "string" && (
-        <Badge>{label(item.operational_status)}</Badge>
+        <StatusBadge value={item.operational_status} />
       )}
       {publicRead && (
-        <Badge
-          variant={
-            item.status === "published"
-              ? "success"
-            : item.status === "archived"
-              ? "neutral"
-              : "warning"
-          }
-        >
-          {item.status === "published"
-            ? "Live on website"
-            : label(item.status)}
-        </Badge>
+        <StatusBadge value={item.status} label={item.status === "published" ? "Live on website" : label(item.status)} />
       )}
     </div>
   );
@@ -1889,68 +1853,7 @@ function RecordActions(props: RecordPresentationProps) {
       ? locationLinks(item)
       : undefined;
   return (
-    <div className="flex flex-wrap items-center justify-end gap-1.5">
-      {maps ? (
-        <>
-          <a
-            href={maps.map}
-            target="_blank"
-            rel="noreferrer"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <MapPinned className="size-3.5" /> View map
-          </a>
-          <a
-            href={maps.directions}
-            target="_blank"
-            rel="noreferrer"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <Navigation className="size-3.5" /> Directions
-          </a>
-        </>
-      ) : null}
-      {typeof item.email === "string" && item.email ? (
-        <a
-          href={`mailto:${item.email}`}
-          aria-label={`Email ${item.title || item.slug}`}
-          className={buttonVariants({
-            variant: "ghost",
-            size: "icon",
-            className: "size-8",
-          })}
-        >
-          <Mail className="size-3.5" />
-        </a>
-      ) : null}
-      {typeof item.phone === "string" && item.phone ? (
-        <a
-          href={`tel:${item.phone}`}
-          aria-label={`Call ${item.title || item.slug}`}
-          className={buttonVariants({
-            variant: "ghost",
-            size: "icon",
-            className: "size-8",
-          })}
-        >
-          <Phone className="size-3.5" />
-        </a>
-      ) : null}
-      {typeof item.url === "string" && item.url ? (
-        <a
-          href={item.url}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`Open ${item.title || item.slug}`}
-          className={buttonVariants({
-            variant: "ghost",
-            size: "icon",
-            className: "size-8",
-          })}
-        >
-          <ExternalLink className="size-3.5" />
-        </a>
-      ) : null}
+    <div className="flex items-center justify-end gap-1.5">
       {mayWorkflow && primaryTransition ? (
         <Button
           variant="outline"
@@ -1961,70 +1864,23 @@ function RecordActions(props: RecordPresentationProps) {
           {primaryTransition.label}
         </Button>
       ) : null}
-      {mayWorkflow && resource?.workflow?.length ? (
-        <select
-          className="h-8 max-w-36 rounded-lg border bg-card px-2 text-xs"
-          value={String(item.operational_status ?? "")}
-          disabled={busy}
-          aria-label={`Change status for ${item.title || item.slug}`}
-          onChange={(event) => onAction(item, `set-${event.target.value}`)}
-        >
-          <option value="" disabled>
-            Set status
-          </option>
-          {resource.workflow.map((state) => (
-            <option key={state.value} value={state.value}>
-              {state.label}
-            </option>
-          ))}
-        </select>
-      ) : null}
-      {mayPublish && resource?.public_read && item.status !== "published" && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => onAction(item, "publish")}
-        >
-          Publish to website
-        </Button>
-      )}
-      {mayPublish && resource?.public_read && item.status === "published" && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => onAction(item, "unpublish")}
-        >
-          Unpublish
-        </Button>
-      )}
-      {mayEdit && (
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => onEdit(item)}
-        >
-          <Pencil className="size-3.5" /> Edit
-        </Button>
-      )}
-      {mayDelete && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          disabled={busy}
-          aria-label={`Delete ${item.title || item.slug}`}
-          onClick={() => onDelete(item)}
-        >
-          {busy ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="size-3.5 text-destructive" />
-          )}
-        </Button>
-      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-8" disabled={busy} aria-label={`Actions for ${item.title || item.slug}`}>
+            {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <MoreHorizontal className="size-4" />}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          {mayEdit ? <DropdownMenuItem onSelect={() => onEdit(item)}><Pencil />Edit</DropdownMenuItem> : null}
+          {maps ? <><DropdownMenuItem asChild><a href={maps.map} target="_blank" rel="noreferrer"><MapPinned />View map</a></DropdownMenuItem><DropdownMenuItem asChild><a href={maps.directions} target="_blank" rel="noreferrer"><Navigation />Directions</a></DropdownMenuItem></> : null}
+          {typeof item.email === "string" && item.email ? <DropdownMenuItem asChild><a href={`mailto:${item.email}`}><Mail />Send email</a></DropdownMenuItem> : null}
+          {typeof item.phone === "string" && item.phone ? <DropdownMenuItem asChild><a href={`tel:${item.phone}`}><Phone />Call</a></DropdownMenuItem> : null}
+          {typeof item.url === "string" && item.url ? <DropdownMenuItem asChild><a href={item.url} target="_blank" rel="noreferrer"><ExternalLink />Open link</a></DropdownMenuItem> : null}
+          {mayWorkflow && resource?.workflow?.length ? <><DropdownMenuSeparator /><DropdownMenuLabel>Change status</DropdownMenuLabel>{resource.workflow.map((state) => <DropdownMenuItem key={state.value} disabled={item.operational_status === state.value} onSelect={() => onAction(item, `set-${state.value}`)}>{state.label}</DropdownMenuItem>)}</> : null}
+          {mayPublish && resource?.public_read ? <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => onAction(item, item.status === "published" ? "unpublish" : "publish")}>{item.status === "published" ? "Remove from website" : "Publish to website"}</DropdownMenuItem></> : null}
+          {mayDelete ? <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => onDelete(item)}><Trash2 />Delete</DropdownMenuItem></> : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -2431,19 +2287,21 @@ function StringListEditor({
       {values.length ? (
         <div className="mb-3 flex flex-wrap gap-2">
           {values.map((item) => (
-            <button
+            <Button
               key={item}
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() =>
                 onChange(
                   JSON.stringify(values.filter((value) => value !== item)),
                 )
               }
-              className="rounded-full bg-muted px-3 py-1 text-xs font-medium hover:bg-destructive/10 hover:text-destructive"
+              className="h-7"
               aria-label={`Remove ${item}`}
             >
               {item} ×
-            </button>
+            </Button>
           ))}
         </div>
       ) : null}
@@ -2794,13 +2652,14 @@ function LineItemsEditor({
           ))}
         </div>
       ) : (
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={() => onChange([{}])}
-          className="w-full rounded-lg border border-dashed p-6 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          className="h-auto w-full border-dashed p-6 text-muted-foreground"
         >
           Add the first line item
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -2974,7 +2833,7 @@ function SupportRecordsEditor({
           Loading {contract.label.toLowerCase()}…
         </p>
       ) : records.length ? (
-        <div className="divide-y rounded-xl border">
+        <div className="divide-y rounded-lg border">
           {records.map((record) => (
             <div
               key={String(record.id)}
@@ -2996,70 +2855,21 @@ function SupportRecordsEditor({
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {record.created_at
-                    ? `Created ${new Date(String(record.created_at)).toLocaleDateString()}`
+                    ? `Created ${formatRecordDate(record.created_at)}`
                     : contract.label}
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() =>
-                  setEditor(
-                    Object.fromEntries(
-                      Object.entries(record).map(([key, value]) => [
-                        key,
-                        typeof value === "object" && value !== null
-                          ? JSON.stringify(value, null, 2)
-                          : value,
-                      ]),
-                    ),
-                  )
-                }
-                aria-label="Edit related record"
-              >
-                <Pencil className="size-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setDeleteRecord(record)}
-                aria-label="Delete related record"
-              >
-                <Trash2 className="size-4 text-destructive" />
-              </Button>
+              <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Related record actions"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => setEditor(Object.fromEntries(Object.entries(record).map(([key, value]) => [key, typeof value === "object" && value !== null ? JSON.stringify(value, null, 2) : value])))}><Pencil />Edit</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => setDeleteRecord(record)}><Trash2 />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
             </div>
           ))}
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed p-5 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
           No {contract.label.toLowerCase()} yet.
         </p>
       )}
     </div>
-    <Dialog
-      open={Boolean(deleteRecord)}
-      onOpenChange={(open) => !open && setDeleteRecord(undefined)}
-    >
-      <DialogContent className="max-w-md">
-        <DialogTitle>Delete related record?</DialogTitle>
-        <DialogDescription>
-          This entry will be permanently removed from {contract.label.toLowerCase()}.
-        </DialogDescription>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setDeleteRecord(undefined)}>
-            Keep it
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => deleteRecord && void removeRelated(deleteRecord)}
-          >
-            <Trash2 className="size-4" /> Delete permanently
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog open={Boolean(deleteRecord)} onOpenChange={(open) => !open && setDeleteRecord(undefined)} title="Delete related record?" description={`This entry will be permanently removed from ${contract.label.toLowerCase()}.`} confirmLabel="Delete permanently" onConfirm={() => deleteRecord && void removeRelated(deleteRecord)} />
     </>
   );
 }

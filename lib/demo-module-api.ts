@@ -331,9 +331,10 @@ function paginated(records: ModuleRecord[], search: URLSearchParams): Paginated<
 
 function memberResponse(path: string, init: RequestInit, data: DemoStore) {
   const parsed = new URL(path, "http://demo.local");
+  const method = init.method ?? "GET";
   const detail = parsed.pathname.match(/\/members\/([^/]+)\/?$/)?.[1];
-  if (!detail && init.method === "GET") return { handled: true, value: { count: data.members.length, results: data.members } };
-  if (!detail && init.method === "POST") return { handled: true, value: null as TenantMember | null, createMember: true };
+  if (!detail && method === "GET") return { handled: true, value: { count: data.members.length, results: data.members } };
+  if (!detail && method === "POST") return { handled: true, value: null as TenantMember | null, createMember: true };
   const member = data.members.find((item) => String(item.id) === decodeURIComponent(detail ?? ""));
   return { handled: Boolean(member), value: member, member };
 }
@@ -348,6 +349,8 @@ export async function demoModuleFetch<T>(path: string, init: RequestInit): Promi
   if (parsed.pathname.startsWith("/api/v1/admin/members/")) {
     const result = memberResponse(path, init, data);
     if (!result.handled) return { handled: false };
+    if (!result.member && !result.createMember)
+      return { handled: true, value: result.value as T };
     const payload = await body(init);
     if (result.createMember) {
       const created: TenantMember = {

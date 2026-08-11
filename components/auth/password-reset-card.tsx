@@ -1,12 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, LoaderCircle, LockKeyhole } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useTenant } from "@/components/providers/app-providers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api-client";
+
+type PasswordResetFields = {
+  email: string;
+  password: string;
+  confirmation: string;
+};
 
 export function PasswordResetCard({
   token,
@@ -16,30 +26,33 @@ export function PasswordResetCard({
   resetLink?: boolean;
 }) {
   const { config } = useTenant();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const confirming = resetLink;
   const invalidLink = resetLink && !token;
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setError("");
-    if (confirming && password !== confirmation) {
-      setError("The passwords do not match.");
-      return;
+  const schema = useMemo(() => z.object({
+    email: confirming ? z.string() : z.string().trim().email("Enter a valid email address."),
+    password: confirming ? z.string().min(8, "Use at least 8 characters.") : z.string(),
+    confirmation: z.string(),
+  }).superRefine((values, context) => {
+    if (confirming && values.password !== values.confirmation) {
+      context.addIssue({ code: "custom", path: ["confirmation"], message: "The passwords do not match." });
     }
-    setPending(true);
+  }), [confirming]);
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<PasswordResetFields>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: "", password: "", confirmation: "" },
+  });
+
+  async function submit(values: PasswordResetFields) {
+    setError("");
     try {
       const response = await fetch(
         confirming ? "/api/auth/reset-password" : "/api/auth/forgot-password",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(confirming ? { token, password } : { email }),
+          body: JSON.stringify(confirming ? { token, password: values.password } : { email: values.email }),
         },
       );
       const data = (await response.json()) as Record<string, unknown>;
@@ -55,18 +68,16 @@ export function PasswordResetCard({
           ? cause.message
           : "The request could not be completed.",
       );
-    } finally {
-      setPending(false);
     }
   }
 
   return (
-    <main className="subtle-grid grid min-h-screen place-items-center px-5 py-10">
-      <section className="w-full max-w-md rounded-2xl border bg-card p-7 shadow-[0_24px_80px_rgb(0_0_0/0.08)] sm:p-9">
-        <div className="mb-7 grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground">
+    <main className="grid min-h-screen place-items-center px-5 py-10">
+      <section className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm sm:p-8">
+        <div className="mb-7 grid size-10 place-items-center rounded-md bg-primary text-primary-foreground">
           <LockKeyhole className="size-5" />
         </div>
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        <p className="text-xs font-medium text-muted-foreground">
           {config.name}
         </p>
         <h1 className="mt-2 text-2xl font-semibold">
@@ -78,7 +89,7 @@ export function PasswordResetCard({
             : "We will email a reset link if this address belongs to an active member."}
         </p>
         {invalidLink ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
             This password reset link is incomplete.
             <div className="mt-4">
               <Link
@@ -90,7 +101,7 @@ export function PasswordResetCard({
             </div>
           </div>
         ) : message ? (
-          <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <div className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
             <CheckCircle2 className="mr-2 inline size-4" />
             {message}
             <div className="mt-4">
@@ -100,49 +111,44 @@ export function PasswordResetCard({
             </div>
           </div>
         ) : (
-          <form className="mt-7 space-y-5" onSubmit={submit}>
+          <form className="mt-7 space-y-5" onSubmit={handleSubmit(submit)} noValidate>
             {confirming ? (
               <>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium">
-                    New password
-                  </span>
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">New password</Label>
                   <Input
+                    id="new-password"
                     type="password"
                     autoComplete="new-password"
-                    minLength={8}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    required
+                    aria-invalid={Boolean(errors.password)}
+                    {...register("password")}
                   />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium">
-                    Confirm password
-                  </span>
+                  {errors.password ? <p className="text-xs text-destructive">{errors.password.message}</p> : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm password</Label>
                   <Input
+                    id="confirm-password"
                     type="password"
                     autoComplete="new-password"
-                    minLength={8}
-                    value={confirmation}
-                    onChange={(event) => setConfirmation(event.target.value)}
-                    required
+                    aria-invalid={Boolean(errors.confirmation)}
+                    {...register("confirmation")}
                   />
-                </label>
+                  {errors.confirmation ? <p className="text-xs text-destructive">{errors.confirmation.message}</p> : null}
+                </div>
               </>
             ) : (
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium">
-                  Email address
-                </span>
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email address</Label>
                 <Input
+                  id="reset-email"
                   type="email"
                   autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
+                  aria-invalid={Boolean(errors.email)}
+                  {...register("email")}
                 />
-              </label>
+                {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
+              </div>
             )}
             {error && (
               <p
@@ -152,8 +158,8 @@ export function PasswordResetCard({
                 {error}
               </p>
             )}
-            <Button className="w-full" size="lg" disabled={pending}>
-              {pending && <LoaderCircle className="size-4 animate-spin" />}
+            <Button className="w-full" size="lg" disabled={isSubmitting}>
+              {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
               {confirming ? "Update password" : "Send reset link"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">

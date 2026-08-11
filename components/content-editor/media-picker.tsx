@@ -137,7 +137,7 @@ export function MediaPicker({
         </Button>
       ) : (
         <div
-          className={`overflow-hidden rounded-xl border bg-card transition-[border-color,box-shadow] ${dragging ? "border-primary ring-3 ring-primary/10" : "border-neutral-200"}`}
+          className={`overflow-hidden rounded-lg border bg-card transition-colors ${dragging ? "border-primary ring-2 ring-primary/10" : "border-border"}`}
           onDragEnter={(event) => {
             event.preventDefault();
             setDragging(true);
@@ -192,13 +192,14 @@ export function MediaPicker({
               </div>
             </>
           ) : (
-            <button
+            <Button
               type="button"
-              className="grid min-h-48 w-full place-items-center p-6 text-center transition-colors hover:bg-neutral-50"
+              variant="ghost"
+              className="grid h-auto min-h-48 w-full place-items-center rounded-none p-6 text-center"
               onClick={() => setOpen(true)}
             >
               <span>
-                <span className="mx-auto grid size-11 place-items-center rounded-xl border bg-white text-muted-foreground shadow-sm">
+                <span className="mx-auto grid size-10 place-items-center rounded-md border bg-white text-muted-foreground">
                   {uploading ? (
                     <LoaderCircle className="size-5 animate-spin" />
                   ) : (
@@ -212,7 +213,7 @@ export function MediaPicker({
                   Select from the media library or drop an image here
                 </span>
               </span>
-            </button>
+            </Button>
           )}
           {!previewUrl ? (
           <div className="flex items-center justify-center gap-2 border-t bg-neutral-50/70 p-3">
@@ -264,7 +265,7 @@ export function MediaPicker({
           </div>
 
           {pendingFile ? (
-            <div className="rounded-xl border bg-neutral-50 p-4">
+            <div className="rounded-lg border bg-neutral-50 p-4">
               <div className="mb-4 flex items-center gap-3">
                 <div className="grid size-10 place-items-center rounded-lg border bg-white text-muted-foreground">
                   <ImageIcon className="size-5" />
@@ -343,14 +344,15 @@ export function MediaPicker({
                   if (!url) return null;
                   const selected = url === previewUrl;
                   return (
-                    <button
+                    <Button
                       key={String(item.id)}
                       type="button"
+                      variant="ghost"
                       onClick={() => {
                         onChange(url);
                         setOpen(false);
                       }}
-                      className="group overflow-hidden rounded-lg border text-left hover:border-primary"
+                      className="group h-auto w-full flex-col items-stretch gap-0 overflow-hidden rounded-lg border p-0 text-left hover:border-primary"
                     >
                       <div className="relative aspect-square bg-muted">
                         <Image
@@ -370,12 +372,12 @@ export function MediaPicker({
                       <p className="truncate px-2.5 py-2 text-xs font-medium">
                         {item.title || "Untitled"}
                       </p>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
             ) : (
-              <div className="grid min-h-48 place-items-center rounded-xl border border-dashed text-sm text-muted-foreground">
+              <div className="grid min-h-48 place-items-center rounded-lg border border-dashed text-sm text-muted-foreground">
                 No images found
               </div>
             )}

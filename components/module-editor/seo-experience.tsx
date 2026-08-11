@@ -95,7 +95,7 @@ export function SeoEditorPreview({
     const destination = String(values.to_path || "/new-page");
     const code = String(values.code || "301");
     return (
-      <section className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+      <section className="rounded-lg border bg-muted/30 p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-blue-950">
           <ArrowRight className="size-4" /> Redirect preview
         </div>
@@ -115,7 +115,7 @@ export function SeoEditorPreview({
 
   if (resourceKey === "schema") {
     return (
-      <section className="rounded-xl border border-violet-100 bg-violet-50/60 p-4">
+      <section className="rounded-lg border bg-muted/30 p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-violet-950">
           <Code2 className="size-4" /> Structured search information
         </div>
@@ -141,7 +141,7 @@ export function SeoEditorPreview({
   ];
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card">
+    <section className="overflow-hidden rounded-lg border bg-card">
       <div className="border-b bg-neutral-50 px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <SearchCheck className="size-4 text-primary" /> Google result preview
@@ -264,7 +264,7 @@ export function SeoSchemaEditor({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border bg-neutral-50/60 p-4">
+    <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
       {fields.length ? (
       <div className="grid gap-4 sm:grid-cols-2">
         {fields.map(([key, label, placeholder]) => (

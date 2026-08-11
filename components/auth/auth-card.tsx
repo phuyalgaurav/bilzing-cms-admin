@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -12,11 +15,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useTenant } from "@/components/providers/app-providers";
 import { DEMO_MODE } from "@/lib/tenant-config";
 import { resolveMediaUrl } from "@/lib/media-url";
 
 type Credentials = { email: string; password: string };
+const loginSchema = z.object({ email: z.email("Enter a valid email address."), password: z.string().min(1, "Enter your password.") });
+const inviteSchema = z.object({ email: z.string(), password: z.string().min(8, "Use at least 8 characters.") });
 
 export function AuthCard({
   mode,
@@ -26,15 +32,12 @@ export function AuthCard({
   onSubmit(values: Credentials): Promise<void>;
 }) {
   const { config } = useTenant();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
   const invite = mode === "invite";
+  const form = useForm<Credentials>({ resolver: zodResolver(invite ? inviteSchema : loginSchema), defaultValues: { email: "", password: "" } });
 
   async function authenticate(credentials: Credentials) {
-    setPending(true);
     setError("");
     try {
       await onSubmit(credentials);
@@ -42,37 +45,29 @@ export function AuthCard({
       setError(
         cause instanceof Error ? cause.message : "Something went wrong.",
       );
-    } finally {
-      setPending(false);
     }
-  }
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    await authenticate({ email, password });
   }
 
   async function enterDemo() {
     const credentials = { email: "admin@bilzing.test", password: "demo1234" };
-    setEmail(credentials.email);
-    setPassword(credentials.password);
+    form.reset(credentials);
     await authenticate(credentials);
   }
 
   return (
     <main
-      className="subtle-grid grid min-h-screen place-items-center bg-cover bg-center px-5 py-10"
+      className="grid min-h-screen place-items-center bg-cover bg-center px-5 py-10"
       style={
         resolveMediaUrl(config.admin_theme.login_background_url)
           ? {
-              backgroundImage: `linear-gradient(rgb(255 255 255 / 0.78), rgb(255 255 255 / 0.9)), url("${resolveMediaUrl(config.admin_theme.login_background_url)}")`,
+              backgroundImage: `url("${resolveMediaUrl(config.admin_theme.login_background_url)}")`,
             }
           : undefined
       }
     >
-      <section className="w-full max-w-md rounded-2xl border bg-card p-7 shadow-[0_24px_80px_rgb(0_0_0/0.08)] sm:p-9">
+      <section className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm sm:p-8">
         <div className="mb-8 flex items-center gap-3">
-          <div className="relative grid size-11 place-items-center overflow-hidden rounded-xl bg-primary text-primary-foreground">
+          <div className="relative grid size-10 place-items-center overflow-hidden rounded-md bg-primary text-primary-foreground">
             {config.admin_theme.logo_url ? (
               <Image
                 src={resolveMediaUrl(config.admin_theme.logo_url)}
@@ -87,7 +82,7 @@ export function AuthCard({
             )}
           </div>
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               {config.name}
             </p>
             <h1 className="font-semibold">{config.admin_theme.brand_name}</h1>
@@ -104,7 +99,7 @@ export function AuthCard({
         </p>
 
         {DEMO_MODE && !invite && (
-          <div className="mt-6 rounded-xl border border-primary/15 bg-primary/5 p-4">
+          <div className="mt-6 rounded-md border border-primary/15 bg-primary/5 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold">Demo workspace</p>
@@ -116,7 +111,7 @@ export function AuthCard({
                 type="button"
                 size="sm"
                 onClick={enterDemo}
-                disabled={pending}
+                disabled={form.formState.isSubmitting}
               >
                 Enter demo
               </Button>
@@ -130,21 +125,20 @@ export function AuthCard({
           </div>
         )}
 
-        <form className="mt-7 space-y-5" onSubmit={submit}>
+        <form className="mt-7 space-y-5" onSubmit={form.handleSubmit(authenticate)}>
           {!invite && (
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">
-                Email address
-              </span>
+            <div>
+              <Label htmlFor="auth-email">Email address</Label>
               <Input
+                id="auth-email"
+                className="mt-1.5"
                 type="email"
                 autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@company.com"
-                required
+                {...form.register("email")}
               />
-            </label>
+              {form.formState.errors.email ? <p className="mt-1 text-xs text-destructive">{form.formState.errors.email.message}</p> : null}
+            </div>
           )}
           <label className="block">
             <span className="mb-2 flex items-center justify-between text-sm font-medium">
@@ -164,14 +158,14 @@ export function AuthCard({
                 type={show ? "text" : "password"}
                 autoComplete={invite ? "new-password" : "current-password"}
                 minLength={invite ? 8 : undefined}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
+                {...form.register("password")}
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => setShow((value) => !value)}
-                className="absolute right-1 top-1 grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-muted"
+                className="absolute right-0.5 top-0.5 size-8"
                 aria-label={show ? "Hide password" : "Show password"}
               >
                 {show ? (
@@ -179,8 +173,9 @@ export function AuthCard({
                 ) : (
                   <Eye className="size-4" />
                 )}
-              </button>
+              </Button>
             </span>
+            {form.formState.errors.password ? <p className="mt-1 text-xs text-destructive">{form.formState.errors.password.message}</p> : null}
           </label>
           {error && (
             <p
@@ -190,8 +185,8 @@ export function AuthCard({
               {error}
             </p>
           )}
-          <Button className="w-full" size="lg" disabled={pending}>
-            {pending ? (
+          <Button className="w-full" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? (
               <LoaderCircle className="size-4 animate-spin" />
             ) : (
               <>
