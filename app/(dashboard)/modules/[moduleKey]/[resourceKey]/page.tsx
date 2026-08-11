@@ -195,7 +195,6 @@ export default function ModuleResourcePage({
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [visibilityFilter, setVisibilityFilter] = useState("");
   const [operationalFilter, setOperationalFilter] = useState("");
   const [ordering, setOrdering] = useState("-updated_at");
   const [page, setPage] = useState(1);
@@ -280,7 +279,6 @@ export default function ModuleResourcePage({
           {
             search: query.trim(),
             status: statusFilter,
-            visibility: visibilityFilter,
             operational_status: operationalFilter,
             ordering,
             page,
@@ -311,7 +309,6 @@ export default function ModuleResourcePage({
       query,
       resource,
       statusFilter,
-      visibilityFilter,
     ],
   );
 
@@ -327,7 +324,6 @@ export default function ModuleResourcePage({
     query,
     resource,
     statusFilter,
-    visibilityFilter,
   ]);
 
   useEffect(() => {
@@ -395,7 +391,10 @@ export default function ModuleResourcePage({
   function beginCreate() {
     setEditing(undefined);
     setCreateSlugSuffix(Date.now().toString(36));
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      visibility: resource?.public_read ? "public" : "private",
+    });
     setData(
       (resource?.fields ?? []).reduce<Record<string, unknown>>(
         (defaults, field) => {
@@ -521,7 +520,10 @@ export default function ModuleResourcePage({
       title,
       slug,
       status: nextStatus ?? form.status,
-      visibility: form.visibility,
+      visibility:
+        (nextStatus ?? form.status) === "published"
+          ? ("public" as const)
+          : ("private" as const),
       sort_order: form.sort_order,
       ...(resource?.line_items ? { line_items: lineItems } : {}),
     };
@@ -903,25 +905,6 @@ export default function ModuleResourcePage({
                         </select>
                       </FieldLabel>
                       <FieldLabel
-                        label="Visibility"
-                        help="Public records can be delivered to the website after publishing."
-                      >
-                        <select
-                          className={selectClass}
-                          value={form.visibility}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              visibility: event.target.value as
-                                "public" | "private",
-                            }))
-                          }
-                        >
-                          <option value="private">Private</option>
-                          <option value="public">Public</option>
-                        </select>
-                      </FieldLabel>
-                      <FieldLabel
                         label="Sort order"
                         help="Lower numbers appear first where ordering is supported."
                       >
@@ -1033,7 +1016,6 @@ export default function ModuleResourcePage({
               />
             </div>
             {resource?.public_read && (
-              <>
                 <select
                   className={`${selectClass} lg:w-36`}
                   value={statusFilter}
@@ -1048,20 +1030,6 @@ export default function ModuleResourcePage({
                   <option value="published">Published</option>
                   <option value="archived">Archived</option>
                 </select>
-                <select
-                  className={`${selectClass} lg:w-36`}
-                  value={visibilityFilter}
-                  onChange={(event) => {
-                    setVisibilityFilter(event.target.value);
-                    setPage(1);
-                  }}
-                  aria-label="Filter by visibility"
-                >
-                  <option value="">All visibility</option>
-                  <option value="public">Public</option>
-                  <option value="private">Private</option>
-                </select>
-              </>
             )}
             <select
               className={`${selectClass} lg:w-44`}
@@ -1079,7 +1047,6 @@ export default function ModuleResourcePage({
             </select>
             {(query ||
               statusFilter ||
-              visibilityFilter ||
               operationalFilter ||
               ordering !== "-updated_at") && (
               <Button
@@ -1089,7 +1056,6 @@ export default function ModuleResourcePage({
                 onClick={() => {
                   setQuery("");
                   setStatusFilter("");
-                  setVisibilityFilter("");
                   setOperationalFilter("");
                   setOrdering("-updated_at");
                   setPage(1);
@@ -1127,23 +1093,23 @@ export default function ModuleResourcePage({
           ) : (
             <EmptyState
               icon={
-                query || statusFilter || visibilityFilter || operationalFilter
+                query || statusFilter || operationalFilter
                   ? Search
                   : FilePlus2
               }
               title={
-                query || statusFilter || visibilityFilter || operationalFilter
+                query || statusFilter || operationalFilter
                   ? "No matching records"
                   : `No ${resourceName.toLowerCase()} yet`
               }
               description={
-                query || statusFilter || visibilityFilter || operationalFilter
+                query || statusFilter || operationalFilter
                   ? "Try a different search or clear the filters."
                   : (resourceUX?.emptyMessage ??
                     `Create the first ${resourceUX?.singular ?? "record"} to get started.`)
               }
               action={
-                query || statusFilter || visibilityFilter || operationalFilter
+                query || statusFilter || operationalFilter
                   ? "Clear filters"
                   : mayCreateRecord
                     ? (resourceUX?.createLabel ??
@@ -1154,12 +1120,10 @@ export default function ModuleResourcePage({
                 if (
                   query ||
                   statusFilter ||
-                  visibilityFilter ||
                   operationalFilter
                 ) {
                   setQuery("");
                   setStatusFilter("");
-                  setVisibilityFilter("");
                   setOperationalFilter("");
                   setPage(1);
                 } else beginCreate();
@@ -1701,16 +1665,15 @@ function RecordBadges({
           variant={
             item.status === "published"
               ? "success"
-              : item.status === "archived"
-                ? "neutral"
-                : "warning"
+            : item.status === "archived"
+              ? "neutral"
+              : "warning"
           }
         >
-          {label(item.status)}
+          {item.status === "published"
+            ? "Live on website"
+            : label(item.status)}
         </Badge>
-      )}
-      {publicRead && item.visibility === "public" && (
-        <Badge variant="brand">Public</Badge>
       )}
     </div>
   );
@@ -1814,7 +1777,7 @@ function RecordActions(props: RecordPresentationProps) {
           disabled={busy}
           onClick={() => onAction(item, "publish")}
         >
-          Publish
+          Publish to website
         </Button>
       )}
       {mayPublish && resource?.public_read && item.status === "published" && (
