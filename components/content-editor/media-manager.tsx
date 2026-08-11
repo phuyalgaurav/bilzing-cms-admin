@@ -14,7 +14,7 @@ import {
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-client";
 import { adminModulePath, getAdminResourceEndpoint } from "@/lib/module-api";
-import { API_URL } from "@/lib/tenant-config";
+import { resolveMediaUrl } from "@/lib/media-url";
 import { canDelete, canEdit } from "@/lib/auth";
 import type { MediaRecord, Paginated } from "@/lib/types";
 import { useAuth } from "@/components/providers/app-providers";
@@ -32,12 +32,6 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const imagePattern = /\.(avif|gif|jpe?g|png|svg|webp)(\?.*)?$/i;
-
-function mediaUrl(value?: string) {
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value) || value.startsWith("data:")) return value;
-  return API_URL ? new URL(value, `${API_URL}/`).toString() : value;
-}
 
 export function MediaManager() {
   const { role } = useAuth();
@@ -254,7 +248,7 @@ export function MediaManager() {
           ) : (
             <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((item) => {
-                const src = mediaUrl(item.file ?? item.url);
+                const src = resolveMediaUrl(item.file ?? item.url);
                 const isImage = Boolean(src && imagePattern.test(src));
                 return (
                   <div

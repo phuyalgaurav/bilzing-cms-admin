@@ -13,7 +13,6 @@ import {
   FilePlus2,
   LoaderCircle,
   Mail,
-  LocateFixed,
   MapPinned,
   Navigation,
   Pencil,
@@ -66,10 +65,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ModuleRecordContext } from "@/components/module-record-context";
+import { LocationPicker } from "@/components/location/location-picker";
+import { resolveMediaUrl } from "@/lib/media-url";
+import {
+  SeoEditorPreview,
+  SeoSchemaEditor,
+  seoFieldPresentation,
+} from "@/components/module-editor/seo-experience";
 
 const PAGE_SIZE = 15;
 const selectClass =
-  "h-10 w-full rounded-md border bg-card px-3 text-sm transition-[border-color,box-shadow] duration-150 focus:border-primary focus:ring-3 focus:ring-primary/10";
+  "h-10 w-full rounded-lg border border-neutral-300 bg-card px-3 text-sm shadow-[0_1px_1px_rgb(0_0_0/0.02)] transition-[border-color,box-shadow] duration-150 focus:border-primary focus:ring-3 focus:ring-primary/10";
 
 const label = (value: string) =>
   value
@@ -199,7 +205,6 @@ function sectionForField(field: ResourceField): FieldSection {
 type RelationOptions = Record<string, ModuleRecord[]>;
 
 interface RecordForm {
-  title: string;
   slug: string;
   status: ModuleRecordStatus;
   visibility: "public" | "private";
@@ -207,7 +212,6 @@ interface RecordForm {
 }
 
 const emptyForm: RecordForm = {
-  title: "",
   slug: "",
   status: "draft",
   visibility: "private",
@@ -248,6 +252,7 @@ export default function ModuleResourcePage({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [busyRecord, setBusyRecord] = useState<string>();
+  const [deleteTarget, setDeleteTarget] = useState<ModuleRecord>();
   const [createSlugSuffix, setCreateSlugSuffix] = useState("");
   const [relatedCreate, setRelatedCreate] = useState<{
     field: ResourceField;
@@ -469,7 +474,6 @@ export default function ModuleResourcePage({
   const edit = useCallback((item: ModuleRecord) => {
     setEditing(item);
     setForm({
-      title: item.title ?? "",
       slug: item.slug,
       status: item.status,
       visibility: item.visibility,
@@ -551,11 +555,9 @@ export default function ModuleResourcePage({
       editing?.title ||
       titleCase(resourceUX?.singular ?? "record");
     const baseSlug = slugify(title) || "record";
-    const slug =
-      editing?.slug ??
-      (resource?.public_read
-        ? baseSlug
-        : `${baseSlug}-${createSlugSuffix || "new"}`);
+    const slug = resource?.public_read
+      ? slugify(form.slug) || baseSlug
+      : editing?.slug ?? `${baseSlug}-${createSlugSuffix || "new"}`;
     return {
       ...(editing ? { id: editing.id } : {}),
       ...fields,
@@ -599,11 +601,7 @@ export default function ModuleResourcePage({
 
   const remove = useCallback(
     async (item: ModuleRecord) => {
-      if (
-        !resource ||
-        !window.confirm(`Permanently delete ${item.title || item.slug}?`)
-      )
-        return;
+      if (!resource) return;
       setBusyRecord(String(item.id));
       setError(undefined);
       try {
@@ -612,6 +610,7 @@ export default function ModuleResourcePage({
         setTotalCount((current) => Math.max(0, current - 1));
         setEditorOpen(false);
         setEditing(undefined);
+        setDeleteTarget(undefined);
       } catch (cause) {
         setError(
           cause instanceof Error
@@ -680,21 +679,54 @@ export default function ModuleResourcePage({
     const generalFields = editorFields.filter(
       (field) =>
         !nextMediaFields.includes(field) &&
-        !nextStructuredFields.includes(field),
+        !nextStructuredFields.includes(field) &&
+        !(
+          keys?.moduleKey === "location_management" &&
+          keys.resourceKey === "locations" &&
+          ["address", "latitude", "longitude"].includes(field.key)
+        ),
     );
+    const seoGroups =
+      keys?.moduleKey === "seo_management"
+        ? keys.resourceKey === "seo-settings"
+          ? [
+              {
+                section: "Search appearance",
+                fields: generalFields.filter((field) =>
+                  ["page", "meta_title", "meta_description", "canonical_url"].includes(
+                    field.key,
+                  ),
+                ),
+              },
+              {
+                section: "Indexing",
+                fields: generalFields.filter((field) =>
+                  ["robots", "sitemap_priority"].includes(field.key),
+                ),
+              },
+            ]
+          : [
+              {
+                section:
+                  keys.resourceKey === "redirects"
+                    ? "Redirect details"
+                    : "Search feature",
+                fields: generalFields,
+              },
+            ]
+        : undefined;
     return {
       mediaFields: nextMediaFields,
       structuredFields: nextStructuredFields,
-      generalFieldGroups: fieldSections
-        .map((section) => ({
+      generalFieldGroups: (seoGroups ??
+        fieldSections.map((section) => ({
           section,
           fields: generalFields.filter(
             (field) => sectionForField(field) === section,
           ),
-        }))
-        .filter((group) => group.fields.length),
+        }))).filter((group) => group.fields.length),
     };
-  }, [resource]);
+  }, [keys, resource]);
   const workflowCounts = useMemo(
     () =>
       Object.fromEntries(
@@ -789,16 +821,20 @@ export default function ModuleResourcePage({
           if (!saving) setEditorOpen(open);
         }}
       >
-        <DialogContent className="!inset-y-0 !right-0 !left-auto !top-0 !h-dvh !max-h-none !w-full !max-w-2xl !translate-x-0 !translate-y-0 overflow-hidden !rounded-none border-y-0 border-r-0 p-0">
+        <DialogContent className="!inset-y-0 !right-0 !left-auto !top-0 !h-dvh !max-h-none !w-full !max-w-3xl !translate-x-0 !translate-y-0 overflow-hidden !rounded-none border-y-0 border-r-0 p-0">
           <Card className="flex h-dvh flex-col overflow-hidden border-0 shadow-none">
-            <CardHeader className="shrink-0 border-b bg-card px-6 py-5 pr-14">
-              <DialogTitle>
+            <CardHeader className="shrink-0 border-b bg-card px-6 py-5 pr-16">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+                {editing ? "Edit" : "New"} {moduleUX?.label ?? "record"}
+              </p>
+              <DialogTitle className="mt-1 text-xl">
                 {editing
-                  ? `Edit ${editing.title || editing.slug}`
-                  : `Create ${resourceUX?.singular ?? "record"}`}
+                  ? editing.title || editing.slug
+                  : titleCase(resourceUX?.singular ?? "record")}
               </DialogTitle>
-              <DialogDescription className="sr-only">
-                {editing ? "Update this record." : "Create a new record."}
+              <DialogDescription className="mt-1 max-w-xl">
+                {resourceUX?.description ??
+                  (editing ? "Update this record." : "Add the details below.")}
               </DialogDescription>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-0">
@@ -806,15 +842,23 @@ export default function ModuleResourcePage({
                 onSubmit={(event) => save(event)}
                 className="flex min-h-full flex-col"
               >
-                <div className="flex-1 space-y-6 p-4 sm:p-5">
+                <div className="flex-1 space-y-4 bg-neutral-50/70 p-4 sm:p-6">
+                {keys?.moduleKey === "seo_management" && keys.resourceKey ? (
+                  <SeoEditorPreview resourceKey={keys.resourceKey} values={data} />
+                ) : null}
                 {generalFieldGroups.map((group, groupIndex) => (
                   <section
                     key={group.section}
-                    className={groupIndex ? "border-t pt-6" : undefined}
+                    className="rounded-xl border bg-card p-4 sm:p-5"
                   >
-                    <h3 className="mb-4 text-sm font-semibold">
-                      {group.section}
-                    </h3>
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold">{group.section}</h3>
+                      {groupIndex === 0 ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Complete the important information first. Optional fields can be added later.
+                        </p>
+                      ) : null}
+                    </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       {group.fields.map((field) => (
                         <ResourceInput
@@ -837,16 +881,20 @@ export default function ModuleResourcePage({
 
                 {keys?.moduleKey === "location_management" &&
                   keys.resourceKey === "locations" && (
-                    <LocationMapEditor
-                      values={data}
-                      onCoordinatesChange={(latitude, longitude) => {
+                    <LocationPicker
+                      address={String(data.address ?? "")}
+                      latitude={String(data.latitude ?? "")}
+                      longitude={String(data.longitude ?? "")}
+                      onChange={({ address, latitude, longitude }) => {
                         setData((current) => ({
                           ...current,
+                          address,
                           latitude,
                           longitude,
                         }));
                         setFieldErrors((current) => ({
                           ...current,
+                          address: "",
                           latitude: "",
                           longitude: "",
                         }));
@@ -855,8 +903,13 @@ export default function ModuleResourcePage({
                   )}
 
                 {!!mediaFields.length && (
-                  <section className="border-t pt-6">
-                    <h3 className="mb-4 text-sm font-semibold">Images</h3>
+                  <section className="rounded-xl border bg-card p-4 sm:p-5">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold">Images</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Choose clear, high-quality images from the shared media library.
+                      </p>
+                    </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       {mediaFields.map((field) => (
                         <ResourceInput
@@ -878,26 +931,40 @@ export default function ModuleResourcePage({
                 )}
 
                 {!!structuredFields.length && (
-                  <section className="border-t pt-6">
+                  <section className="rounded-xl border bg-card p-4 sm:p-5">
                     <h3 className="mb-4 text-sm font-semibold">
-                      Additional details
+                      {keys?.moduleKey === "seo_management" && keys.resourceKey === "schema"
+                        ? "Structured data details"
+                        : "Additional details"}
                     </h3>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      {structuredFields.map((field) => (
-                        <ResourceInput
-                          key={field.key}
-                          field={field}
-                          value={data[field.key]}
-                          options={relations[field.key] ?? []}
-                          error={fieldErrors[field.key]}
-                          onChange={(value) => updateField(field, value)}
-                          onCreateRelated={() => beginRelatedCreate(field)}
-                          canCreateRelated={Boolean(
-                            field.relation_endpoint &&
-                              resourceContracts[field.relation_endpoint]?.allowed_actions?.includes("create"),
-                          )}
-                        />
-                      ))}
+                      {structuredFields.map((field) =>
+                        keys?.moduleKey === "seo_management" &&
+                        keys.resourceKey === "schema" &&
+                        field.key === "json_ld" ? (
+                          <div key={field.key} className="sm:col-span-2">
+                            <SeoSchemaEditor
+                              value={data[field.key]}
+                              schemaType={String(data.schema_type || "Organization")}
+                              onChange={(value) => updateField(field, value)}
+                            />
+                          </div>
+                        ) : (
+                          <ResourceInput
+                            key={field.key}
+                            field={field}
+                            value={data[field.key]}
+                            options={relations[field.key] ?? []}
+                            error={fieldErrors[field.key]}
+                            onChange={(value) => updateField(field, value)}
+                            onCreateRelated={() => beginRelatedCreate(field)}
+                            canCreateRelated={Boolean(
+                              field.relation_endpoint &&
+                                resourceContracts[field.relation_endpoint]?.allowed_actions?.includes("create"),
+                            )}
+                          />
+                        ),
+                      )}
                     </div>
                   </section>
                 )}
@@ -930,25 +997,9 @@ export default function ModuleResourcePage({
                 )}
 
                 {resource?.public_read && (
-                  <section className="border-t pt-7">
+                  <section className="rounded-xl border bg-card p-4 sm:p-5">
                     <h3 className="mb-4 text-sm font-semibold">Publishing</h3>
                     <div className="grid gap-5 sm:grid-cols-2">
-                      <FieldLabel
-                        label="Slug"
-                        required
-                        help="Used in API detail URLs and public links."
-                      >
-                        <Input
-                          value={form.slug}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              slug: slugify(event.target.value),
-                            }))
-                          }
-                          required
-                        />
-                      </FieldLabel>
                       <FieldLabel label="Publishing status">
                         <select
                           className={selectClass}
@@ -965,51 +1016,95 @@ export default function ModuleResourcePage({
                           <option value="archived">Archived</option>
                         </select>
                       </FieldLabel>
-                      <FieldLabel
-                        label="Sort order"
-                        help="Lower numbers appear first where ordering is supported."
-                      >
-                        <Input
-                          type="number"
-                          value={form.sort_order}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              sort_order: Number(event.target.value),
-                            }))
-                          }
-                        />
-                      </FieldLabel>
+                      <div className="sm:col-span-2">
+                        <details className="rounded-lg border bg-neutral-50/60">
+                          <summary className="cursor-pointer px-3 py-2.5 text-xs font-semibold text-muted-foreground">
+                            Advanced publishing options
+                          </summary>
+                          <div className="grid gap-4 border-t bg-card p-4 sm:grid-cols-2">
+                            <FieldLabel
+                              label="Public URL ending"
+                              help="Leave blank to create it automatically from the name."
+                            >
+                              <div className="flex overflow-hidden rounded-lg border border-neutral-300 bg-card focus-within:border-primary focus-within:ring-3 focus-within:ring-primary/10">
+                                <span className="grid place-items-center border-r bg-neutral-50 px-3 text-sm text-muted-foreground">/</span>
+                                <input
+                                  aria-label="Public URL ending"
+                                  className="h-10 min-w-0 flex-1 bg-transparent px-3 text-sm"
+                                  value={form.slug}
+                                  placeholder="created-automatically"
+                                  onChange={(event) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      slug: slugify(event.target.value),
+                                    }))
+                                  }
+                                />
+                              </div>
+                            </FieldLabel>
+                            <FieldLabel
+                              label="Display order"
+                              help="Lower numbers appear first where manual ordering is supported."
+                            >
+                              <Input
+                                type="number"
+                                value={form.sort_order}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    sort_order: Number(event.target.value),
+                                  }))
+                                }
+                              />
+                            </FieldLabel>
+                          </div>
+                        </details>
+                      </div>
                     </div>
                   </section>
                 )}
                 </div>
-                <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t bg-card px-5 py-4 sm:px-6">
+                <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t bg-card px-5 py-4 shadow-[0_-8px_24px_rgb(0_0_0/0.04)] sm:px-6">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     onClick={() => setEditorOpen(false)}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" variant="secondary" disabled={saving}>
-                    {saving && <LoaderCircle className="size-4 animate-spin" />}{" "}
-                    {editing
-                      ? "Save changes"
-                      : `Create ${resourceUX?.singular ?? "record"}`}
-                  </Button>
-                  {resource?.public_read && (
+                  <div className="flex flex-wrap justify-end gap-2">
+                  {resource?.public_read && form.status !== "published" ? (
+                    <Button type="submit" variant="outline" disabled={saving}>
+                      {saving ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                      {editing ? `Save as ${label(form.status)}` : "Save draft"}
+                    </Button>
+                  ) : null}
+                  {resource?.public_read ? (
                     <Button
-                      type="button"
+                      type={form.status === "published" ? "submit" : "button"}
                       disabled={saving}
-                      onClick={(event) => save(event, "published")}
+                      onClick={
+                        form.status === "published"
+                          ? undefined
+                          : (event) => save(event, "published")
+                      }
                     >
-                      {saving && (
-                        <LoaderCircle className="size-4 animate-spin" />
-                      )}{" "}
-                      Save & publish
+                      {saving ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                      {form.status === "published"
+                        ? "Save changes"
+                        : editing
+                          ? "Save & publish"
+                          : `Publish ${resourceUX?.singular ?? "record"}`}
+                    </Button>
+                  ) : (
+                    <Button type="submit" disabled={saving}>
+                      {saving ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                      {editing
+                        ? "Save changes"
+                        : `Create ${resourceUX?.singular ?? "record"}`}
                     </Button>
                   )}
+                  </div>
                 </div>
               </form>
             </CardContent>
@@ -1022,6 +1117,35 @@ export default function ModuleResourcePage({
         onClose={() => setRelatedCreate(undefined)}
         onCreated={useRelatedRecord}
       />
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(undefined)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogTitle>Delete {resourceUX?.singular ?? "record"}?</DialogTitle>
+          <DialogDescription>
+            {deleteTarget?.title || deleteTarget?.slug || "This record"} will be permanently removed. This cannot be undone.
+          </DialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setDeleteTarget(undefined)}>
+              Keep it
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={Boolean(deleteTarget && busyRecord === String(deleteTarget.id))}
+              onClick={() => deleteTarget && void remove(deleteTarget)}
+            >
+              {deleteTarget && busyRecord === String(deleteTarget.id) ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Delete permanently
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardContent className="p-0">
@@ -1148,7 +1272,7 @@ export default function ModuleResourcePage({
               mayPublish={mayPublish}
               busyRecord={busyRecord}
               onEdit={edit}
-              onDelete={remove}
+              onDelete={setDeleteTarget}
               onAction={applyAction}
             />
           ) : (
@@ -1563,7 +1687,7 @@ function RecordTile(props: RecordPresentationProps) {
         typeof imageValue === "string" && (
           <div className="relative aspect-video border-b bg-muted">
             <Image
-              src={imageValue}
+              src={resolveMediaUrl(imageValue)}
               alt={item.title || item.slug}
               fill
               sizes="(max-width: 640px) 100vw, 33vw"
@@ -1611,7 +1735,7 @@ function RecordRow(props: RecordPresentationProps) {
         <div className="relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
           {typeof imageValue === "string" ? (
             <Image
-              src={imageValue}
+              src={resolveMediaUrl(imageValue)}
               alt=""
               fill
               sizes="40px"
@@ -1922,140 +2046,19 @@ function FieldLabel({
 }) {
   return (
     <fieldset className={`block min-w-0 text-sm font-medium ${className ?? ""}`}>
-      <legend>
+      <legend className="text-[13px] font-semibold text-neutral-800">
         {fieldLabel}
-        {required ? " *" : ""}
+        {required ? <span className="ml-1 text-destructive">*</span> : null}
       </legend>
       <div className="mt-2">{children}</div>
       {(error || help) && (
         <span
-          className={`mt-1 block text-xs font-normal ${error ? "text-destructive" : "text-muted-foreground"}`}
+          className={`mt-1.5 block text-xs font-normal leading-5 ${error ? "text-destructive" : "text-muted-foreground"}`}
         >
           {error || help}
         </span>
       )}
     </fieldset>
-  );
-}
-
-function LocationMapEditor({
-  values,
-  onCoordinatesChange,
-}: {
-  values: LocationValues;
-  onCoordinatesChange: (latitude: string, longitude: string) => void;
-}) {
-  const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string>();
-  const latitude = Number(values.latitude);
-  const longitude = Number(values.longitude);
-  const hasCoordinates =
-    values.latitude !== "" &&
-    values.latitude != null &&
-    values.longitude !== "" &&
-    values.longitude != null &&
-    Number.isFinite(latitude) &&
-    Number.isFinite(longitude);
-  const links = locationLinks(values);
-  const embedUrl = hasCoordinates
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.006}%2C${latitude - 0.004}%2C${longitude + 0.006}%2C${latitude + 0.004}&layer=mapnik&marker=${latitude}%2C${longitude}`
-    : undefined;
-
-  function useCurrentLocation() {
-    if (!navigator.geolocation) {
-      setLocationError("Location access is not supported by this browser.");
-      return;
-    }
-    setLocating(true);
-    setLocationError(undefined);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        onCoordinatesChange(
-          position.coords.latitude.toFixed(6),
-          position.coords.longitude.toFixed(6),
-        );
-        setLocating(false);
-      },
-      () => {
-        setLocationError(
-          "We could not access your location. You can enter the coordinates manually.",
-        );
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  }
-
-  return (
-    <section className="border-t pt-6">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">Map and directions</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Preview the pin and check the route visitors will use.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={useCurrentLocation}
-          disabled={locating}
-        >
-          {locating ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
-          ) : (
-            <LocateFixed className="size-3.5" />
-          )}
-          Use current location
-        </Button>
-      </div>
-      <div className="overflow-hidden rounded-lg border bg-muted/30">
-        {embedUrl ? (
-          <iframe
-            key={embedUrl}
-            title="Location map preview"
-            src={embedUrl}
-            className="h-56 w-full border-0"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <div className="grid min-h-40 place-items-center p-6 text-center">
-            <div>
-              <MapPinned className="mx-auto size-6 text-muted-foreground" />
-              <p className="mt-2 text-sm font-medium">No map pin yet</p>
-              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                Add latitude and longitude, or use your current location, to see a map preview.
-              </p>
-            </div>
-          </div>
-        )}
-        {links ? (
-          <div className="flex flex-wrap gap-2 border-t bg-card p-3">
-            <a
-              href={links.map}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <MapPinned className="size-3.5" /> Open map
-            </a>
-            <a
-              href={links.directions}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <Navigation className="size-3.5" /> Test directions
-            </a>
-          </div>
-        ) : null}
-      </div>
-      {locationError ? (
-        <p className="mt-2 text-xs text-destructive">{locationError}</p>
-      ) : null}
-    </section>
   );
 }
 
@@ -2156,6 +2159,7 @@ function ResourceInput({
   onCreateRelated?: () => void;
   canCreateRelated?: boolean;
 }) {
+  const presentation = seoFieldPresentation(field);
   const relationLabel = field.relation_label_field || "title";
   const numericField = field.type === "number";
   const fractionalNumber =
@@ -2168,7 +2172,9 @@ function ResourceInput({
   const maximum = field.key === "rating" ? 5 : undefined;
   const fullWidth =
     ["textarea", "json", "file"].includes(field.type) ||
-    field.key === "gallery";
+    field.key === "gallery" ||
+    field.key === "meta_title" ||
+    isImageField(field);
   const input =
     field.key === "gallery" ? (
       <MediaGalleryPicker value={value} onChange={onChange} />
@@ -2184,19 +2190,66 @@ function ResourceInput({
     ) : field.type === "json" && field.key !== "json_ld" ? (
       <KeyValueEditor value={value} onChange={onChange} />
     ) : field.type === "textarea" || field.type === "json" ? (
+      <div>
       <Textarea
-        aria-label={field.label}
+        aria-label={presentation.label}
         className={
           field.type === "json" ? "min-h-36 font-mono text-xs" : "min-h-24"
         }
         value={String(value ?? "")}
         onChange={(event) => onChange(event.target.value)}
         required={field.required}
-        placeholder={field.type === "json" ? "{}" : undefined}
+        placeholder={presentation.placeholder ?? (field.type === "json" ? "{}" : undefined)}
       />
+      {["meta_title", "meta_description"].includes(field.key) ? (
+        <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">
+          {String(value ?? "").length}/{field.key === "meta_title" ? 60 : 160}
+        </p>
+      ) : null}
+      </div>
+    ) : field.key === "robots" ? (
+      <select
+        aria-label={presentation.label}
+        className={selectClass}
+        value={String(value || "index,follow")}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="index,follow">Show in search and follow links</option>
+        <option value="index,nofollow">Show in search, do not follow links</option>
+        <option value="noindex,follow">Hide from search, follow links</option>
+        <option value="noindex,nofollow">Hide from search and do not follow links</option>
+      </select>
+    ) : field.key === "sitemap_priority" ? (
+      <select
+        aria-label={presentation.label}
+        className={selectClass}
+        value={String(value || "0.50")}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="0.30">Supporting page</option>
+        <option value="0.50">Normal page</option>
+        <option value="0.80">Important page</option>
+        <option value="1.00">Top-level page</option>
+      </select>
+    ) : field.key === "schema_type" ? (
+      <select
+        aria-label={presentation.label}
+        className={selectClass}
+        value={String(value || "Organization")}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="Organization">Organization</option>
+        <option value="LocalBusiness">Local business</option>
+        <option value="WebSite">Website</option>
+        <option value="Article">Article</option>
+        <option value="Product">Product</option>
+        <option value="Event">Event</option>
+        <option value="FAQPage">FAQ page</option>
+        <option value="BreadcrumbList">Breadcrumbs</option>
+      </select>
     ) : field.type === "select" ? (
       <select
-        aria-label={field.label}
+        aria-label={presentation.label}
         className={selectClass}
         value={String(value ?? "")}
         onChange={(event) => onChange(event.target.value)}
@@ -2263,16 +2316,32 @@ function ResourceInput({
           required={field.required && !value}
         />
       </div>
+    ) : field.key === "meta_title" ? (
+      <div>
+        <Input
+          aria-label={presentation.label}
+          value={String(value ?? "")}
+          onChange={(event) => onChange(event.target.value)}
+          required={field.required}
+          placeholder={presentation.placeholder}
+          maxLength={255}
+        />
+        <p className="mt-1 text-right text-[11px] tabular-nums text-muted-foreground">
+          {String(value ?? "").length}/60 recommended
+        </p>
+      </div>
     ) : field.type === "boolean" ? (
-      <label className="flex h-10 items-center gap-3 rounded-lg border px-3 font-normal">
+      <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-neutral-300 bg-card px-3 font-normal">
+        <span className="text-sm text-muted-foreground">
+          {value ? "Enabled" : "Disabled"}
+        </span>
         <input
           aria-label={field.label}
           type="checkbox"
-          className="size-4"
+          className="size-4 accent-[var(--brand)]"
           checked={Boolean(value)}
           onChange={(event) => onChange(event.target.checked)}
-        />{" "}
-        Yes
+        />
       </label>
     ) : (
       <Input
@@ -2312,13 +2381,14 @@ function ResourceInput({
         value={String(value ?? "")}
         onChange={(event) => onChange(event.target.value)}
         required={field.required}
+        placeholder={presentation.placeholder}
       />
     );
   return (
     <FieldLabel
-      label={field.label}
+      label={presentation.label}
       required={field.required}
-      help={field.help_text}
+      help={presentation.help ?? field.help_text}
       error={error}
       className={fullWidth ? "sm:col-span-2" : undefined}
     >
@@ -2750,6 +2820,7 @@ function SupportRecordsEditor({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
+  const [deleteRecord, setDeleteRecord] = useState<Record<string, unknown>>();
   const actionLabel =
     contract.label === "Stock movements"
       ? "Record adjustment"
@@ -2829,10 +2900,11 @@ function SupportRecordsEditor({
   }
 
   async function removeRelated(record: Record<string, unknown>) {
-    if (!record.id || !window.confirm("Delete this related record?")) return;
+    if (!record.id) return;
     try {
       await deleteAdminSupportRecord(contract.endpoint, String(record.id));
       setRecords((current) => current.filter((item) => item.id !== record.id));
+      setDeleteRecord(undefined);
     } catch (cause) {
       setErrorMessage(
         cause instanceof Error
@@ -2843,6 +2915,7 @@ function SupportRecordsEditor({
   }
 
   return (
+    <>
     <div>
       <div className="mb-3 flex items-center justify-between border-b pb-3">
         <div>
@@ -2951,7 +3024,7 @@ function SupportRecordsEditor({
                 type="button"
                 variant="ghost"
                 size="icon"
-                onClick={() => removeRelated(record)}
+                onClick={() => setDeleteRecord(record)}
                 aria-label="Delete related record"
               >
                 <Trash2 className="size-4 text-destructive" />
@@ -2965,6 +3038,29 @@ function SupportRecordsEditor({
         </p>
       )}
     </div>
+    <Dialog
+      open={Boolean(deleteRecord)}
+      onOpenChange={(open) => !open && setDeleteRecord(undefined)}
+    >
+      <DialogContent className="max-w-md">
+        <DialogTitle>Delete related record?</DialogTitle>
+        <DialogDescription>
+          This entry will be permanently removed from {contract.label.toLowerCase()}.
+        </DialogDescription>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDeleteRecord(undefined)}>
+            Keep it
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => deleteRecord && void removeRelated(deleteRecord)}
+          >
+            <Trash2 className="size-4" /> Delete permanently
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

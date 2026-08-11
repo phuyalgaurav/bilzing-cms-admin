@@ -79,9 +79,44 @@ const locationFields: ResourceField[] = [
   { key: "is_primary", label: "Primary location", type: "boolean", required: false },
 ];
 
+const seoFields: Record<string, ResourceField[]> = {
+  "seo-settings": [
+    { key: "page", label: "Page", type: "text", required: false },
+    { key: "meta_title", label: "Meta title", type: "text", required: false },
+    { key: "meta_description", label: "Meta description", type: "textarea", required: false },
+    { key: "canonical_url", label: "Canonical URL", type: "url", required: false },
+    { key: "robots", label: "Robots", type: "text", required: false },
+    { key: "sitemap_priority", label: "Sitemap priority", type: "number", required: false },
+    { key: "og_image", label: "Open Graph image", type: "url", required: false },
+  ],
+  redirects: [
+    { key: "from_path", label: "From path", type: "text", required: true },
+    { key: "to_path", label: "To path", type: "text", required: true },
+    {
+      key: "code",
+      label: "Code",
+      type: "select",
+      required: true,
+      options: [
+        ["301", "301 Permanent"],
+        ["302", "302 Temporary"],
+        ["307", "307 Temporary"],
+        ["308", "308 Permanent"],
+      ],
+    },
+    { key: "is_active", label: "Active", type: "boolean", required: false },
+  ],
+  schema: [
+    { key: "schema_type", label: "Schema type", type: "text", required: false },
+    { key: "json_ld", label: "JSON-LD", type: "json", required: false },
+  ],
+};
+
 function fieldsFor(moduleKey: string, resourceKey: string, primaryFields: string[]) {
   if (moduleKey === "location_management" && resourceKey === "locations")
     return locationFields;
+  if (moduleKey === "seo_management" && seoFields[resourceKey])
+    return seoFields[resourceKey];
   return defaultFields(primaryFields);
 }
 
@@ -109,7 +144,7 @@ function endpointFor(moduleKey: string, resourceKey: string) {
 
 function publicResource(moduleKey: string, resourceKey: string) {
   return (
-    ["website_pages", "media_library", "blog", "gallery", "faq", "team_management", "service_catalog", "product_catalog", "location_management"].includes(moduleKey) ||
+    ["website_pages", "media_library", "blog", "gallery", "faq", "team_management", "service_catalog", "product_catalog", "location_management", "seo_management"].includes(moduleKey) ||
     ["pages", "posts", "gallery-items", "faqs", "services", "products"].includes(resourceKey)
   );
 }
@@ -148,6 +183,14 @@ const contractsByEndpoint = new Map(
 );
 
 function defaultValue(key: string, position: number): string | number {
+  if (key === "robots") return "index,follow";
+  if (key === "sitemap_priority") return 0.5;
+  if (key === "schema_type") return "Organization";
+  if (key === "code") return "301";
+  if (key === "from_path") return `/old-page-${position}`;
+  if (key === "to_path") return `/new-page-${position}`;
+  if (key === "canonical_url") return `https://example.com/page-${position}`;
+  if (key === "page") return `/page-${position}`;
   if (/email/.test(key)) return `sample${position}@bilzing.test`;
   if (/(url|website|canonical)/.test(key)) return `https://example.test/${position}`;
   if (/(date|expires|occurred|published)/.test(key)) return "2026-08-09";
