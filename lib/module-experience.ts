@@ -587,7 +587,7 @@ export const moduleExperiences: Record<string, ModuleExperience> = {
         "locations",
         "Manage public branch information.",
         "directory",
-        ["address", "phone", "latitude"],
+        ["address", "phone", "directions"],
       ),
     },
   },

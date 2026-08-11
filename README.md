@@ -1,8 +1,10 @@
 # Bilzing CMS Admin
 
-Canonical tenant admin frontend for Bilzing CMS. The same Next.js application is deployed for every tenant and receives branding and API configuration at runtime.
+The canonical Next.js tenant admin for Bilzing CMS. One codebase is configured
+and deployed independently for every tenant; tenant names, modules, branding,
+and API URLs are not hardcoded.
 
-## Local setup
+## Run connected to Django
 
 ```bash
 cp .env.example .env.local
@@ -10,26 +12,63 @@ npm ci
 npm run dev
 ```
 
-Required environment variables:
+```dotenv
+NEXT_PUBLIC_TENANT_KEY=acme
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+CMS_API_INTERNAL_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_DEMO_MODE=false
+```
 
-- `NEXT_PUBLIC_TENANT_KEY` — immutable tenant identifier
-- `NEXT_PUBLIC_API_URL` — shared Django API base URL
-- `CMS_API_INTERNAL_URL` — optional server-only Django URL for Docker/private networking
-- `NEXT_PUBLIC_ADMIN_THEME` — optional JSON theme fallback
-- `NEXT_PUBLIC_DEMO_MODE` — set to `true` for the local sample workspace, or `false` for the Django API
+When Next.js runs inside the backend Docker network, use
+`CMS_API_INTERNAL_URL=http://web:8000` while keeping `NEXT_PUBLIC_API_URL` set to
+the browser-reachable backend. Restart the dev process after changing env vars.
+
+## Run standalone demo mode
+
+```bash
+npm ci
+npm run dev:demo
+```
 
 Demo login: `admin@bilzing.test` / `demo1234`.
 
-To run the frontend by itself, use `npm run dev:demo`. It overrides any
-backend-connected environment values, enables every CMS module, and keeps demo
-records, edits, workflow changes, members, and uploads in browser storage.
+Demo mode enables every module and supports local CRUD, workflows, members,
+record context, media, and maps using browser storage. It is for product testing
+only and does not write Django data.
+
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_TENANT_KEY` | Immutable tenant identifier. |
+| `NEXT_PUBLIC_API_URL` | Browser-facing shared Django API. |
+| `CMS_API_INTERNAL_URL` | Optional server-only API URL for auth handlers. |
+| `NEXT_PUBLIC_ADMIN_THEME` | JSON fallback theme. |
+| `NEXT_PUBLIC_ENABLED_MODULES` | JSON module fallback. |
+| `NEXT_PUBLIC_MODULE_PRESET` | Preset fallback. |
+| `NEXT_PUBLIC_DEMO_MODE` | `true` enables standalone demo mode. |
+
+## Product structure
+
+- Dashboard with per-browser workspace customization.
+- Daily enabled modules in primary navigation.
+- Website/configuration tools under Settings.
+- Dedicated pages, posts, navigation, media, members, and profile screens.
+- Contract-driven concrete resource editors for every optional module.
+- Search, filters, workflow/lifecycle actions, related creation, media pickers,
+  context tools, and map/directions support.
+
+The authenticated backend response from `/api/v1/admin/modules/` controls
+canonical endpoints, fields, workflows, and `allowed_actions`. The backend is
+authoritative for RBAC.
 
 ## Checks
 
 ```bash
-npm run typecheck
 npm run lint
+npm run typecheck
 npm run build
 ```
 
-The project uses the Next.js App Router, Tailwind CSS, Radix UI primitives, and shadcn-style local UI components. It is ready to deploy on Vercel.
+The full platform documentation is maintained in the
+[Bilzing CMS backend repository](https://github.com/phuyalgaurav/bilzing-cms-backend/tree/main/docs).

@@ -66,6 +66,25 @@ const defaultFields = (primaryFields: string[]): ResourceField[] => {
   ];
 };
 
+const locationFields: ResourceField[] = [
+  { key: "name", label: "Name", type: "text", required: true },
+  { key: "image", label: "Image", type: "url", required: false },
+  { key: "address", label: "Address", type: "textarea", required: false },
+  { key: "latitude", label: "Latitude", type: "number", required: false },
+  { key: "longitude", label: "Longitude", type: "number", required: false },
+  { key: "phone", label: "Phone", type: "text", required: false },
+  { key: "directions", label: "Directions", type: "textarea", required: false },
+  { key: "parking_info", label: "Parking and access", type: "textarea", required: false },
+  { key: "opening_hours", label: "Opening hours", type: "json", required: false },
+  { key: "is_primary", label: "Primary location", type: "boolean", required: false },
+];
+
+function fieldsFor(moduleKey: string, resourceKey: string, primaryFields: string[]) {
+  if (moduleKey === "location_management" && resourceKey === "locations")
+    return locationFields;
+  return defaultFields(primaryFields);
+}
+
 const canonicalPathOverrides: Record<string, string> = {
   "analytics:events": "analytics-events",
   "membership:plans": "membership-plans",
@@ -110,7 +129,7 @@ export const demoModuleDirectory: ModuleContract[] = Object.entries(moduleExperi
           public_endpoint: `/api/v1/${canonicalPath(moduleKey, resourceKey)}/`,
           public_read: publicResource(moduleKey, resourceKey),
           public_create: false,
-          fields: defaultFields(resource.primaryFields ?? []),
+          fields: fieldsFor(moduleKey, resourceKey, resource.primaryFields ?? []),
           line_items: null,
           support: null,
           workflow: workflow.map(([value, label]) => ({ value, label })),
@@ -133,7 +152,9 @@ function defaultValue(key: string, position: number): string | number {
   if (/(url|website|canonical)/.test(key)) return `https://example.test/${position}`;
   if (/(date|expires|occurred|published)/.test(key)) return "2026-08-09";
   if (/(time|duration)/.test(key)) return position === 1 ? "09:00" : "14:00";
-  if (/(price|amount|cost|quantity|rating|latitude|longitude|discount|capacity|stock|level|code)/.test(key)) return position * 100;
+  if (key === "latitude") return position === 1 ? 27.717245 : 27.671;
+  if (key === "longitude") return position === 1 ? 85.323959 : 85.4298;
+  if (/(price|amount|cost|quantity|rating|discount|capacity|stock|level|code)/.test(key)) return position * 100;
   return `Sample ${titleCase(key)} ${position}`;
 }
 

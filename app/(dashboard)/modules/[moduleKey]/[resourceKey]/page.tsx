@@ -13,6 +13,9 @@ import {
   FilePlus2,
   LoaderCircle,
   Mail,
+  LocateFixed,
+  MapPinned,
+  Navigation,
   Pencil,
   Plus,
   RefreshCw,
@@ -86,6 +89,45 @@ const formatRecordDate = (value: unknown) => {
     ? displayValue(value)
     : parsed.toLocaleString();
 };
+
+type LocationValues = Record<string, unknown>;
+
+function locationDestination(values: LocationValues) {
+  const latitude = values.latitude;
+  const longitude = values.longitude;
+  if (
+    latitude !== null &&
+    latitude !== undefined &&
+    latitude !== "" &&
+    longitude !== null &&
+    longitude !== undefined &&
+    longitude !== ""
+  ) {
+    return `${latitude},${longitude}`;
+  }
+  return typeof values.address === "string" ? values.address.trim() : "";
+}
+
+function locationLinks(values: LocationValues) {
+  const destination = locationDestination(values);
+  if (!destination) return undefined;
+  const mapLinks =
+    values.map_links && typeof values.map_links === "object"
+      ? (values.map_links as Record<string, unknown>)
+      : undefined;
+  const directionsLinks =
+    values.directions_links && typeof values.directions_links === "object"
+      ? (values.directions_links as Record<string, unknown>)
+      : undefined;
+  return {
+    map:
+      (typeof mapLinks?.google === "string" && mapLinks.google) ||
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`,
+    directions:
+      (typeof directionsLinks?.google === "string" && directionsLinks.google) ||
+      `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`,
+  };
+}
 
 const imageFieldPattern = /(^|_)(image|photo|avatar|logo|cover)(_|$)/;
 const listJsonFields = new Set([
@@ -792,6 +834,25 @@ export default function ModuleResourcePage({
                     </div>
                   </section>
                 ))}
+
+                {keys?.moduleKey === "location_management" &&
+                  keys.resourceKey === "locations" && (
+                    <LocationMapEditor
+                      values={data}
+                      onCoordinatesChange={(latitude, longitude) => {
+                        setData((current) => ({
+                          ...current,
+                          latitude,
+                          longitude,
+                        }));
+                        setFieldErrors((current) => ({
+                          ...current,
+                          latitude: "",
+                          longitude: "",
+                        }));
+                      }}
+                    />
+                  )}
 
                 {!!mediaFields.length && (
                   <section className="border-t pt-6">
@@ -1699,8 +1760,32 @@ function RecordActions(props: RecordPresentationProps) {
     resourceKey,
     item.operational_status,
   );
+  const maps =
+    moduleKey === "location_management" && resourceKey === "locations"
+      ? locationLinks(item)
+      : undefined;
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
+      {maps ? (
+        <>
+          <a
+            href={maps.map}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <MapPinned className="size-3.5" /> View map
+          </a>
+          <a
+            href={maps.directions}
+            target="_blank"
+            rel="noreferrer"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <Navigation className="size-3.5" /> Directions
+          </a>
+        </>
+      ) : null}
       {typeof item.email === "string" && item.email ? (
         <a
           href={`mailto:${item.email}`}
@@ -1850,6 +1935,127 @@ function FieldLabel({
         </span>
       )}
     </fieldset>
+  );
+}
+
+function LocationMapEditor({
+  values,
+  onCoordinatesChange,
+}: {
+  values: LocationValues;
+  onCoordinatesChange: (latitude: string, longitude: string) => void;
+}) {
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string>();
+  const latitude = Number(values.latitude);
+  const longitude = Number(values.longitude);
+  const hasCoordinates =
+    values.latitude !== "" &&
+    values.latitude != null &&
+    values.longitude !== "" &&
+    values.longitude != null &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude);
+  const links = locationLinks(values);
+  const embedUrl = hasCoordinates
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.006}%2C${latitude - 0.004}%2C${longitude + 0.006}%2C${latitude + 0.004}&layer=mapnik&marker=${latitude}%2C${longitude}`
+    : undefined;
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setLocationError("Location access is not supported by this browser.");
+      return;
+    }
+    setLocating(true);
+    setLocationError(undefined);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        onCoordinatesChange(
+          position.coords.latitude.toFixed(6),
+          position.coords.longitude.toFixed(6),
+        );
+        setLocating(false);
+      },
+      () => {
+        setLocationError(
+          "We could not access your location. You can enter the coordinates manually.",
+        );
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
+  return (
+    <section className="border-t pt-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Map and directions</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Preview the pin and check the route visitors will use.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={useCurrentLocation}
+          disabled={locating}
+        >
+          {locating ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : (
+            <LocateFixed className="size-3.5" />
+          )}
+          Use current location
+        </Button>
+      </div>
+      <div className="overflow-hidden rounded-lg border bg-muted/30">
+        {embedUrl ? (
+          <iframe
+            key={embedUrl}
+            title="Location map preview"
+            src={embedUrl}
+            className="h-56 w-full border-0"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="grid min-h-40 place-items-center p-6 text-center">
+            <div>
+              <MapPinned className="mx-auto size-6 text-muted-foreground" />
+              <p className="mt-2 text-sm font-medium">No map pin yet</p>
+              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                Add latitude and longitude, or use your current location, to see a map preview.
+              </p>
+            </div>
+          </div>
+        )}
+        {links ? (
+          <div className="flex flex-wrap gap-2 border-t bg-card p-3">
+            <a
+              href={links.map}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <MapPinned className="size-3.5" /> Open map
+            </a>
+            <a
+              href={links.directions}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Navigation className="size-3.5" /> Test directions
+            </a>
+          </div>
+        ) : null}
+      </div>
+      {locationError ? (
+        <p className="mt-2 text-xs text-destructive">{locationError}</p>
+      ) : null}
+    </section>
   );
 }
 
@@ -2080,7 +2286,15 @@ function ResourceInput({
                 ? "number"
                 : field.type
         }
-        step={numericField ? (fractionalNumber ? "0.01" : "1") : undefined}
+        step={
+          numericField
+            ? ["latitude", "longitude"].includes(field.key)
+              ? "0.000001"
+              : fractionalNumber
+                ? "0.01"
+                : "1"
+            : undefined
+        }
         min={
           numericField && !allowNegative
             ? field.key === "rating"
@@ -2088,7 +2302,13 @@ function ResourceInput({
               : 0
             : undefined
         }
-        max={maximum}
+        max={
+          field.key === "latitude"
+            ? 90
+            : field.key === "longitude"
+              ? 180
+              : maximum
+        }
         value={String(value ?? "")}
         onChange={(event) => onChange(event.target.value)}
         required={field.required}
