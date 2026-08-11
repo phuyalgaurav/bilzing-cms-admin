@@ -31,6 +31,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Textarea } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MediaPicker } from "@/components/content-editor/media-picker";
 
 const blank: ContentRecord = {
   title: "",
@@ -212,7 +213,7 @@ export function ContentManager({ type }: { type: "pages" | "posts" }) {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-left">
+              <table className="w-full min-w-175 text-left">
                 <thead>
                   <tr className="border-b bg-neutral-50/70 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     <th className="px-5 py-3">Title</th>
@@ -373,21 +374,20 @@ export function ContentManager({ type }: { type: "pages" | "posts" }) {
                         }
                       />
                     </label>
-                    <label>
+                    <div>
                       <span className="mb-2 block text-sm font-medium">
-                        Featured image URL
+                        Featured image
                       </span>
-                      <Input
-                        type="url"
+                      <MediaPicker
                         value={editor.featured_image ?? ""}
-                        onChange={(e) =>
+                        onChange={(featuredImage) =>
                           setEditor({
                             ...editor,
-                            featured_image: e.target.value,
+                            featured_image: featuredImage,
                           })
                         }
                       />
-                    </label>
+                    </div>
                     <label className="sm:col-span-2">
                       <span className="mb-2 block text-sm font-medium">
                         Tags

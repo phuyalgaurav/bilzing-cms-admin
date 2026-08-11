@@ -23,9 +23,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolveMediaUrl } from "@/lib/media-url";
 
 function mediaUrl(item: MediaRecord) {
-  return item.file || item.url || "";
+  return resolveMediaUrl(item.file || item.url);
 }
 
 function getMediaEndpoint() {
@@ -41,12 +42,17 @@ export function MediaPicker({
   onChange: (value: string) => void;
   compact?: boolean;
 }) {
+  const previewUrl = resolveMediaUrl(value);
   const uploadInput = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<MediaRecord[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File>();
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadAltText, setUploadAltText] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,13 +78,22 @@ export function MediaPicker({
     return () => window.clearTimeout(timer);
   }, [load, open]);
 
-  async function upload(files: FileList | null) {
+  function queueUpload(files: FileList | null) {
     const file = files?.[0];
+    if (!file) return;
+    setPendingFile(file);
+    setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+    setUploadAltText("");
+    setOpen(true);
+  }
+
+  async function upload() {
+    const file = pendingFile;
     if (!file) return;
     setUploading(true);
     const form = new FormData();
-    form.set("title", file.name.replace(/\.[^.]+$/, ""));
-    form.set("alt_text", "");
+    form.set("title", uploadTitle.trim() || file.name.replace(/\.[^.]+$/, ""));
+    form.set("alt_text", uploadAltText.trim());
     form.set("file", file);
     form.set(
       "metadata",
@@ -96,6 +111,7 @@ export function MediaPicker({
       const url = mediaUrl(saved);
       setItems((current) => [saved, ...current]);
       if (url) onChange(url);
+      setPendingFile(undefined);
       setOpen(false);
       toast.success("Image uploaded");
     } catch (cause) {
@@ -108,68 +124,130 @@ export function MediaPicker({
 
   return (
     <>
+      <input
+        ref={uploadInput}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => queueUpload(event.target.files)}
+      />
       {compact ? (
         <Button type="button" variant="outline" onClick={() => setOpen(true)}>
           <ImageIcon className="size-4" /> Add image
         </Button>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
-          <div className="relative aspect-[16/7] bg-muted">
-            {value ? (
+        <div
+          className={`overflow-hidden rounded-xl border bg-card transition-[border-color,box-shadow] ${dragging ? "border-primary ring-3 ring-primary/10" : "border-neutral-200"}`}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node))
+              setDragging(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            queueUpload(event.dataTransfer.files);
+          }}
+        >
+          {previewUrl ? (
+            <>
+              <div className="relative aspect-[16/8] bg-neutral-100">
               <Image
-                src={value}
+                src={previewUrl}
                 alt="Selected image"
                 fill
                 sizes="(max-width: 768px) 100vw, 50vw"
                 unoptimized
                 className="object-cover"
               />
-            ) : (
-              <div className="grid h-full place-items-center text-muted-foreground">
-                <ImageIcon className="size-7" />
               </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2 border-t p-3">
+              <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2.5">
+                <div className="mr-auto min-w-0">
+                  <p className="text-xs font-semibold">Selected image</p>
+                  <p className="max-w-64 truncate text-[11px] text-muted-foreground">
+                    {previewUrl.split("/").pop()?.split("?")[0] || "Media library image"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOpen(true)}
+                >
+                  Replace
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onChange("")}
+                  aria-label="Remove selected image"
+                >
+                  <Trash2 className="size-3.5" /> Remove
+                </Button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="grid min-h-48 w-full place-items-center p-6 text-center transition-colors hover:bg-neutral-50"
+              onClick={() => setOpen(true)}
+            >
+              <span>
+                <span className="mx-auto grid size-11 place-items-center rounded-xl border bg-white text-muted-foreground shadow-sm">
+                  {uploading ? (
+                    <LoaderCircle className="size-5 animate-spin" />
+                  ) : (
+                    <ImageIcon className="size-5" />
+                  )}
+                </span>
+                <span className="mt-3 block text-sm font-semibold text-foreground">
+                  Choose an image
+                </span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Select from the media library or drop an image here
+                </span>
+              </span>
+            </button>
+          )}
+          {!previewUrl ? (
+          <div className="flex items-center justify-center gap-2 border-t bg-neutral-50/70 p-3">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setOpen(true)}
             >
-              <ImageIcon className="size-4" />{" "}
-              {value ? "Replace image" : "Choose image"}
+              <ImageIcon className="size-3.5" /> Browse library
             </Button>
-            {value ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onChange("")}
-              >
-                <Trash2 className="size-4" /> Remove
-              </Button>
-            ) : null}
+            <Button type="button" variant="ghost" size="sm" onClick={() => uploadInput.current?.click()}>
+              <Upload className="size-3.5" /> Upload new
+            </Button>
           </div>
+          ) : null}
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (uploading) return;
+          setOpen(nextOpen);
+          if (!nextOpen) setPendingFile(undefined);
+        }}
+      >
         <DialogContent className="max-w-4xl">
           <div className="flex items-start justify-between gap-4 pr-8">
             <div>
               <DialogTitle>Choose image</DialogTitle>
-              <DialogDescription className="sr-only">
-                Select an existing image or upload a new one.
+              <DialogDescription>
+                Reuse an existing image or upload a new one.
               </DialogDescription>
             </div>
-            <input
-              ref={uploadInput}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(event) => upload(event.target.files)}
-            />
             <Button
               type="button"
               size="sm"
@@ -184,6 +262,62 @@ export function MediaPicker({
               Upload
             </Button>
           </div>
+
+          {pendingFile ? (
+            <div className="rounded-xl border bg-neutral-50 p-4">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-lg border bg-white text-muted-foreground">
+                  <ImageIcon className="size-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{pendingFile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(pendingFile.size / 1024 / 1024).toFixed(1)} MB
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm font-semibold">
+                  Image name
+                  <Input
+                    className="mt-2 bg-white"
+                    value={uploadTitle}
+                    onChange={(event) => setUploadTitle(event.target.value)}
+                    required
+                  />
+                </label>
+                <label className="text-sm font-semibold">
+                  Alternative text
+                  <Input
+                    className="mt-2 bg-white"
+                    value={uploadAltText}
+                    onChange={(event) => setUploadAltText(event.target.value)}
+                    placeholder="Describe the image for accessibility"
+                  />
+                </label>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={uploading}
+                  onClick={() => setPendingFile(undefined)}
+                >
+                  Cancel upload
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={uploading || !uploadTitle.trim()}
+                  onClick={upload}
+                >
+                  {uploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  Upload & use image
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -207,7 +341,7 @@ export function MediaPicker({
                 {items.map((item) => {
                   const url = mediaUrl(item);
                   if (!url) return null;
-                  const selected = url === value;
+                  const selected = url === previewUrl;
                   return (
                     <button
                       key={String(item.id)}
@@ -281,7 +415,7 @@ export function MediaGalleryPicker({
               className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
             >
               <Image
-                src={url}
+                src={resolveMediaUrl(url)}
                 alt={`Gallery image ${index + 1}`}
                 fill
                 sizes="(max-width: 640px) 50vw, 20vw"

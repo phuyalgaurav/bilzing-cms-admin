@@ -29,6 +29,7 @@ export default function MembersPage() {
   const [memberRole, setMemberRole] = useState<Role>("editor");
   const [saving, setSaving] = useState(false);
   const [updating, setUpdating] = useState<string>();
+  const [removeTarget, setRemoveTarget] = useState<TenantMember>();
   const canManage = role === "super_admin";
 
   const load = useCallback(async () => {
@@ -82,12 +83,12 @@ export default function MembersPage() {
   }
 
   async function remove(member: TenantMember) {
-    if (!window.confirm(`Remove ${member.email} from this workspace?`)) return;
     try {
       await apiFetch(`/api/v1/admin/members/${member.id}/`, {
         method: "DELETE",
       });
       setMembers((current) => current.filter((item) => item.id !== member.id));
+      setRemoveTarget(undefined);
       toast.success(`${member.email} was removed`);
     } catch (cause) {
       toast.error(
@@ -239,7 +240,7 @@ export default function MembersPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => remove(member)}
+                            onClick={() => setRemoveTarget(member)}
                             aria-label={`Remove ${member.email}`}
                           >
                             <Trash2 className="size-4" />
@@ -300,6 +301,28 @@ export default function MembersPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(removeTarget)}
+        onOpenChange={(nextOpen) => !nextOpen && setRemoveTarget(undefined)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogTitle>Remove employee access?</DialogTitle>
+          <DialogDescription>
+            {removeTarget?.email} will no longer be able to access this workspace. Their account is not deleted.
+          </DialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRemoveTarget(undefined)}>
+              Keep access
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => removeTarget && void remove(removeTarget)}
+            >
+              <Trash2 className="size-4" /> Remove access
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

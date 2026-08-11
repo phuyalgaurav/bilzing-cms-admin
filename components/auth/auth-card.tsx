@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTenant } from "@/components/providers/app-providers";
 import { DEMO_MODE } from "@/lib/tenant-config";
+import { resolveMediaUrl } from "@/lib/media-url";
 
 type Credentials = { email: string; password: string };
 
@@ -62,9 +63,9 @@ export function AuthCard({
     <main
       className="subtle-grid grid min-h-screen place-items-center bg-cover bg-center px-5 py-10"
       style={
-        config.admin_theme.login_background_url
+        resolveMediaUrl(config.admin_theme.login_background_url)
           ? {
-              backgroundImage: `linear-gradient(rgb(255 255 255 / 0.78), rgb(255 255 255 / 0.9)), url("${config.admin_theme.login_background_url}")`,
+              backgroundImage: `linear-gradient(rgb(255 255 255 / 0.78), rgb(255 255 255 / 0.9)), url("${resolveMediaUrl(config.admin_theme.login_background_url)}")`,
             }
           : undefined
       }
@@ -74,7 +75,7 @@ export function AuthCard({
           <div className="relative grid size-11 place-items-center overflow-hidden rounded-xl bg-primary text-primary-foreground">
             {config.admin_theme.logo_url ? (
               <Image
-                src={config.admin_theme.logo_url}
+                src={resolveMediaUrl(config.admin_theme.logo_url)}
                 alt=""
                 fill
                 sizes="44px"

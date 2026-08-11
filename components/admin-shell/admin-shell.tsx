@@ -20,6 +20,7 @@ import { roleLabel } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import { moduleExperience, modulePrimaryPath } from "@/lib/module-experience";
+import { resolveMediaUrl } from "@/lib/media-url";
 
 interface NavigationLink {
   href: string;
@@ -169,7 +170,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-primary text-sm font-bold text-primary-foreground">
           {config.admin_theme.logo_url ? (
             <Image
-              src={config.admin_theme.logo_url}
+              src={resolveMediaUrl(config.admin_theme.logo_url)}
               alt={`${config.admin_theme.brand_name ?? config.name} logo`}
               fill
               sizes="36px"
