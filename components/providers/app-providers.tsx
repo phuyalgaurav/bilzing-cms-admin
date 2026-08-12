@@ -10,13 +10,24 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { apiErrorMessage, setAccessToken } from "@/lib/api-client";
+import { toast } from "sonner";
+import {
+  apiErrorMessage,
+  refreshAdminSession,
+  SESSION_EXPIRED_EVENT,
+  SESSION_REFRESHED_EVENT,
+  setAccessToken,
+  type RefreshedSession,
+} from "@/lib/api-client";
 import {
   applyTheme,
+  defaultDashboardWidgets,
+  defaultSidebarNavigation,
   fetchTenantConfig,
   normalizeTheme,
 } from "@/lib/tenant-config";
 import type { Role, TenantConfig, TenantTheme } from "@/lib/types";
+import { invalidateAdminModuleDirectory } from "@/lib/module-api";
 
 interface AuthContextValue {
   ready: boolean;
@@ -52,6 +63,8 @@ const initialConfig: TenantConfig = {
     "user_management",
     "settings",
   ],
+  sidebar_navigation: defaultSidebarNavigation,
+  dashboard_widgets: defaultDashboardWidgets,
   admin_theme: normalizeTheme(),
 };
 
@@ -67,6 +80,7 @@ function TenantProvider({ children }: { children: React.ReactNode }) {
     try {
       const next = await fetchTenantConfig();
       currentTheme.current = next.admin_theme;
+      invalidateAdminModuleDirectory();
       setConfig(next);
       applyTheme(next.admin_theme);
       setError(null);
@@ -101,60 +115,93 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [access, setAccess] = useState<string | null>(null);
   const [role, setRole] = useState<Role>();
-  const refreshInFlight = useRef<Promise<void> | null>(null);
   const lastRefreshAt = useRef(0);
   const bootstrapStarted = useRef(false);
+  const sessionRevision = useRef(0);
+  const acceptSessionEvents = useRef(true);
 
-  const clearSession = useCallback(() => {
+  const clearSession = useCallback((reason?: "session-expired" | "session-unavailable") => {
+    sessionRevision.current += 1;
+    acceptSessionEvents.current = false;
+    invalidateAdminModuleDirectory();
     setAccess(null);
     setAccessToken(null);
     setRole(undefined);
+    if (reason) window.sessionStorage.setItem("cms-auth-reason", reason);
+    else window.sessionStorage.removeItem("cms-auth-reason");
   }, []);
 
   const setSession = useCallback((session: SessionResponse) => {
+    sessionRevision.current += 1;
+    acceptSessionEvents.current = true;
+    invalidateAdminModuleDirectory();
     setAccess((current) => (current === session.access ? current : session.access));
     setAccessToken(session.access);
     setRole((current) => (current === session.role ? current : session.role));
+    setReady(true);
+    window.sessionStorage.removeItem("cms-auth-reason");
   }, []);
 
   useEffect(() => {
     if (bootstrapStarted.current) return;
     bootstrapStarted.current = true;
+    const revision = sessionRevision.current;
     fetch("/api/auth/refresh", { method: "POST" })
       .then(async (response) => {
-        if (response.ok) setSession(await response.json());
+        const data = await response.json().catch(() => ({}));
+        if (revision !== sessionRevision.current) return;
+        if (response.ok) setSession(data as SessionResponse);
+        else if (response.status === 401 && data.detail === "Session expired.")
+          clearSession("session-expired");
+        else if (response.status === 401)
+          clearSession();
+        else if (response.status !== 401)
+          clearSession("session-unavailable");
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (revision === sessionRevision.current)
+          clearSession("session-unavailable");
+      })
       .finally(() => {
         lastRefreshAt.current = Date.now();
         setReady(true);
       });
-  }, [setSession]);
+  }, [clearSession, setSession]);
+
+  useEffect(() => {
+    const onSessionRefreshed = (event: Event) => {
+      if (!acceptSessionEvents.current) return;
+      const session = (event as CustomEvent<RefreshedSession>).detail;
+      if (session?.access) setSession(session as SessionResponse);
+    };
+    const onSessionExpired = () => {
+      if (!acceptSessionEvents.current) return;
+      clearSession("session-expired");
+      router.replace("/login?reason=session-expired");
+    };
+    window.addEventListener(SESSION_REFRESHED_EVENT, onSessionRefreshed);
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => {
+      window.removeEventListener(SESSION_REFRESHED_EVENT, onSessionRefreshed);
+      window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    };
+  }, [clearSession, router, setSession]);
 
   const revalidateSession = useCallback(() => {
-    if (refreshInFlight.current) return refreshInFlight.current;
     if (Date.now() - lastRefreshAt.current < 15_000)
       return Promise.resolve();
-
-    const request = (async () => {
-      try {
-        const response = await fetch("/api/auth/refresh", { method: "POST" });
-        lastRefreshAt.current = Date.now();
-        if (response.ok) {
-          setSession(await response.json());
-          return;
-        }
-        clearSession();
-        router.replace("/login");
-      } catch {
-        return;
-      }
-    })().finally(() => {
-      refreshInFlight.current = null;
-    });
-    refreshInFlight.current = request;
-    return request;
-  }, [clearSession, router, setSession]);
+    lastRefreshAt.current = Date.now();
+    return refreshAdminSession()
+      .then(() => undefined)
+      .catch((cause) => {
+        toast.error(
+          cause instanceof Error
+            ? cause.message
+            : "Your session could not be refreshed.",
+          { id: "session-refresh-failed" },
+        );
+      });
+  }, []);
 
   useEffect(() => {
     if (!access) return;
@@ -205,7 +252,9 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    sessionRevision.current += 1;
+    acceptSessionEvents.current = false;
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     clearSession();
     router.replace("/login");
   }, [clearSession, router]);

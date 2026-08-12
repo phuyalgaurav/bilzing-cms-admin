@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
 import { LoaderCircle, MoreHorizontal, Plus, ShieldX, Trash2, UserCheck, UserRoundCog, UserX } from "lucide-react";
@@ -35,17 +35,19 @@ export default function MembersPage() {
   const [open, setOpen] = useState(false);
   const [updating, setUpdating] = useState<string>();
   const [removeTarget, setRemoveTarget] = useState<TenantMember>();
+  const loadRequest = useRef(0);
   const canManage = role === "super_admin";
   const form = useForm<InviteForm>({ resolver: zodResolver(inviteSchema), defaultValues: { email: "", role: "editor" } });
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequest.current;
     if (!canManage) { setLoading(false); return; }
     setLoading(true); setError(null);
-    try { const value = await apiFetch<Paginated<TenantMember> | TenantMember[]>("/api/v1/admin/members/?ordering=email"); setMembers(Array.isArray(value) ? value : value.results); }
-    catch (cause) { const message = cause instanceof Error ? cause.message : "Members could not be loaded."; setError(message); toast.error(message); }
-    finally { setLoading(false); }
+    try { const value = await apiFetch<Paginated<TenantMember> | TenantMember[]>("/api/v1/admin/members/?ordering=email"); if (requestId === loadRequest.current) setMembers(Array.isArray(value) ? value : value.results); }
+    catch (cause) { if (requestId === loadRequest.current) { const message = cause instanceof Error ? cause.message : "Members could not be loaded."; setError(message); toast.error(message); } }
+    finally { if (requestId === loadRequest.current) setLoading(false); }
   }, [canManage]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); return () => { loadRequest.current += 1; }; }, [load]);
 
   async function invite(values: InviteForm) {
     try { const member = await apiFetch<TenantMember>("/api/v1/admin/members/", { method: "POST", body: JSON.stringify({ ...values, is_active: true }) }); setMembers((current) => [...current, member].sort((a, b) => a.email.localeCompare(b.email))); setOpen(false); form.reset(); toast.success(`Access email sent to ${member.email}`); }

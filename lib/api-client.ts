@@ -1,5 +1,14 @@
 import { demoModuleFetch } from "./demo-module-api";
 import { API_URL, DEMO_MODE, TENANT_KEY } from "./tenant-config";
+import type { Role } from "./types";
+
+export const SESSION_REFRESHED_EVENT = "cms:session-refreshed";
+export const SESSION_EXPIRED_EVENT = "cms:session-expired";
+
+export interface RefreshedSession {
+  access: string;
+  role?: Role;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -46,8 +55,14 @@ export function apiErrorMessage(
 }
 
 let accessToken: string | null = null;
+let refreshRequest: Promise<RefreshedSession | null> | null = null;
 export function setAccessToken(token: string | null) {
   accessToken = token;
+}
+
+function emitSessionEvent(name: string, detail?: RefreshedSession) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
 async function parseError(response: Response) {
@@ -77,12 +92,27 @@ async function parseError(response: Response) {
   );
 }
 
-async function refreshAccessToken() {
-  const response = await fetch("/api/auth/refresh", { method: "POST" });
-  if (!response.ok) return null;
-  const data = await response.json();
-  accessToken = data.access;
-  return accessToken;
+export async function refreshAdminSession() {
+  if (refreshRequest) return refreshRequest;
+  refreshRequest = (async () => {
+    const response = await fetch("/api/auth/refresh", { method: "POST" });
+    if (response.ok) {
+      const data = (await response.json()) as RefreshedSession;
+      if (!data.access) throw new ApiError("The refreshed session was invalid.", 502);
+      accessToken = data.access;
+      emitSessionEvent(SESSION_REFRESHED_EVENT, data);
+      return data;
+    }
+    if (response.status === 401) {
+      accessToken = null;
+      emitSessionEvent(SESSION_EXPIRED_EVENT);
+      return null;
+    }
+    throw await parseError(response);
+  })().finally(() => {
+    refreshRequest = null;
+  });
+  return refreshRequest;
 }
 
 export async function apiFetch<T>(
@@ -102,8 +132,15 @@ export async function apiFetch<T>(
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
-  if (response.status === 401 && retry && (await refreshAccessToken()))
-    return apiFetch<T>(path, init, false);
+  if (response.status === 401 && retry) {
+    const session = await refreshAdminSession();
+    if (session) return apiFetch<T>(path, init, false);
+    throw new ApiError("Your session expired. Sign in again to continue.", 401);
+  }
+  if (response.status === 401) {
+    accessToken = null;
+    emitSessionEvent(SESSION_EXPIRED_EVENT);
+  }
   if (!response.ok) throw await parseError(response);
   if (response.status === 204) return undefined as T;
   return response.json();

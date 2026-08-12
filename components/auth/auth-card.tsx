@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  Info,
   LoaderCircle,
   LockKeyhole,
 } from "lucide-react";
@@ -27,9 +28,11 @@ const inviteSchema = z.object({ email: z.string(), password: z.string().min(8, "
 export function AuthCard({
   mode,
   onSubmit,
+  notice,
 }: {
   mode: "login" | "invite";
   onSubmit(values: Credentials): Promise<void>;
+  notice?: string;
 }) {
   const { config } = useTenant();
   const [show, setShow] = useState(false);
@@ -97,6 +100,13 @@ export function AuthCard({
             ? "Choose a secure password to accept your workspace invitation."
             : "Sign in to manage content for your website."}
         </p>
+
+        {notice ? (
+          <div role="status" className="mt-5 flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+            <Info className="mt-0.5 size-4 shrink-0" />
+            <p>{notice}</p>
+          </div>
+        ) : null}
 
         {DEMO_MODE && !invite && (
           <div className="mt-6 rounded-md border border-primary/15 bg-primary/5 p-4">

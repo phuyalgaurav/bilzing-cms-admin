@@ -44,6 +44,10 @@ export function getAdminModuleDirectory() {
 
 let directoryRequest: Promise<ModuleContract[]> | undefined;
 
+export function invalidateAdminModuleDirectory() {
+  directoryRequest = undefined;
+}
+
 /** Resolve endpoints from the tenant's active server contract, never from a hard-coded route. */
 export function getAdminResourceEndpoint(moduleKey: string, resourceKey: string) {
   directoryRequest ??= getAdminModuleDirectory().catch((cause) => {

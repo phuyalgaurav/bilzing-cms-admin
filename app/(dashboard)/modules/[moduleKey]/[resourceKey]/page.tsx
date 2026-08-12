@@ -255,6 +255,8 @@ export default function ModuleResourcePage({
   const [items, setItems] = useState<ModuleRecord[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [relations, setRelations] = useState<RelationOptions>({});
+  const [relationError, setRelationError] = useState<string>();
+  const [relationReload, setRelationReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string>();
@@ -278,6 +280,7 @@ export default function ModuleResourcePage({
     contract: ModuleResourceContract;
   }>();
   const recordRequest = useRef(0);
+  const relationRequest = useRef(0);
 
   useEffect(() => {
     params.then(setKeys);
@@ -394,6 +397,7 @@ export default function ModuleResourcePage({
 
   useEffect(() => {
     if (!resource) return;
+    const requestId = ++relationRequest.current;
     const relationFields = [
       ...resource.fields.map((field) => ({ field, key: field.key })),
       ...(resource.line_items?.fields ?? []).map((field) => ({
@@ -411,8 +415,10 @@ export default function ModuleResourcePage({
     );
     if (!relationFields.length) {
       setRelations({});
+      setRelationError(undefined);
       return;
     }
+    setRelationError(undefined);
     Promise.all(
       relationFields.map(async ({ field, key }) => {
         try {
@@ -420,16 +426,29 @@ export default function ModuleResourcePage({
             field.relation_endpoint!,
             { ordering: "title" },
           );
-          return [
+          return {
             key,
-            Array.isArray(response) ? response : response.results,
-          ] as const;
+            records: Array.isArray(response) ? response : response.results,
+            failed: false,
+          } as const;
         } catch {
-          return [key, []] as const;
+          return { key, records: [] as ModuleRecord[], failed: true } as const;
         }
       }),
-    ).then((entries) => setRelations(Object.fromEntries(entries)));
-  }, [enabledAdminEndpoints, resource]);
+    ).then((entries) => {
+      if (requestId !== relationRequest.current) return;
+      setRelations(
+        Object.fromEntries(entries.map(({ key, records }) => [key, records])),
+      );
+      if (entries.some(({ failed }) => failed))
+        setRelationError(
+          "Some related options could not be loaded. Existing records are preserved; retry before editing relation fields.",
+        );
+    });
+    return () => {
+      relationRequest.current += 1;
+    };
+  }, [enabledAdminEndpoints, relationReload, resource]);
 
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const visibleItems = items;
@@ -833,6 +852,22 @@ export default function ModuleResourcePage({
           </CardContent>
         </Card>
       )}
+
+      {relationError && !error ? (
+        <Card className="mb-4 border-amber-300/60 bg-amber-50/50">
+          <CardContent className="flex flex-wrap items-center gap-3 p-4 text-sm text-amber-950">
+            <span className="mr-auto">{relationError}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setRelationReload((current) => current + 1)}
+            >
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Sheet
         open={editorOpen}

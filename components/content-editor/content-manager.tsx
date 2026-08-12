@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
@@ -59,21 +59,28 @@ export function ContentManager({ type }: { type: "pages" | "posts" }) {
   const [originalSlug, setOriginalSlug] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ContentRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const loadRequest = useRef(0);
   const form = useForm<ContentForm>({ resolver: zodResolver(contentSchema), defaultValues: emptyForm });
   const { reset } = form;
   const seoTitle = useWatch({ control: form.control, name: "seoTitle" });
   const seoDescription = useWatch({ control: form.control, name: "seoDescription" });
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequest.current;
     setLoading(true); setError(null);
     try {
       const endpoint = await getAdminResourceEndpoint(moduleKey, type);
       const query = new URLSearchParams({ ordering: "-updated_at" });
       if (search) query.set("search", search);
       const value = await apiFetch<Paginated<ContentRecord> | ContentRecord[]>(`${adminModulePath(endpoint)}?${query}`);
-      setItems(Array.isArray(value) ? value : value.results);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Content couldn’t be loaded."); }
-    finally { setLoading(false); }
+      if (requestId === loadRequest.current)
+        setItems(Array.isArray(value) ? value : value.results);
+    } catch (cause) {
+      if (requestId === loadRequest.current)
+        setError(cause instanceof Error ? cause.message : "Content couldn’t be loaded.");
+    } finally {
+      if (requestId === loadRequest.current) setLoading(false);
+    }
   }, [moduleKey, type, search]);
 
   const openCreate = useCallback(() => { setOriginalSlug(null); setEditor({ title: "", slug: "", status: "draft", content: { body: "" } }); reset(emptyForm); }, [reset]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -44,7 +44,9 @@ export function NavigationManager() {
   const [error, setError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<NavigationRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const load = () => {
+  const loadRequest = useRef(0);
+  const load = useCallback(() => {
+    const requestId = ++loadRequest.current;
     setLoading(true);
     getAdminResourceEndpoint("website_pages", "navigations")
       .then((endpoint) =>
@@ -53,14 +55,25 @@ export function NavigationManager() {
         ),
       )
       .then((value) => {
+        if (requestId !== loadRequest.current) return;
         const records = Array.isArray(value) ? value : value.results;
         setItems(records.map((record) => ({ ...record, items: record.items ?? [] })));
         setError("");
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  };
-  useEffect(load, []);
+      .catch((cause) => {
+        if (requestId === loadRequest.current)
+          setError(cause instanceof Error ? cause.message : "Navigation could not be loaded.");
+      })
+      .finally(() => {
+        if (requestId === loadRequest.current) setLoading(false);
+      });
+  }, []);
+  useEffect(() => {
+    load();
+    return () => {
+      loadRequest.current += 1;
+    };
+  }, [load]);
   const create = () => {
     setOriginal(null);
     setEditor({ name: "", slug: "", items: [{ label: "", href: "/" }] });

@@ -44,6 +44,7 @@ export function MediaPicker({
 }) {
   const previewUrl = resolveMediaUrl(value);
   const uploadInput = useRef<HTMLInputElement>(null);
+  const loadRequest = useRef(0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<MediaRecord[]>([]);
   const [query, setQuery] = useState("");
@@ -55,6 +56,7 @@ export function MediaPicker({
   const [uploadAltText, setUploadAltText] = useState("");
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequest.current;
     setLoading(true);
     try {
       const endpoint = await getMediaEndpoint();
@@ -62,18 +64,24 @@ export function MediaPicker({
         ordering: "-created_at",
         search: query,
       });
-      setItems(Array.isArray(response) ? response : response.results);
+      if (requestId === loadRequest.current)
+        setItems(Array.isArray(response) ? response : response.results);
     } catch (cause) {
-      toast.error(
-        cause instanceof Error ? cause.message : "Could not load media.",
-      );
+      if (requestId === loadRequest.current)
+        toast.error(
+          cause instanceof Error ? cause.message : "Could not load media.",
+        );
     } finally {
-      setLoading(false);
+      if (requestId === loadRequest.current) setLoading(false);
     }
   }, [query]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      loadRequest.current += 1;
+      setLoading(false);
+      return;
+    }
     const timer = window.setTimeout(load, 200);
     return () => window.clearTimeout(timer);
   }, [load, open]);

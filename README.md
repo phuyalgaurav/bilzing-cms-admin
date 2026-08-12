@@ -50,7 +50,8 @@ only and does not write Django data.
 
 ## Product structure
 
-- Dashboard with per-browser workspace customization.
+- Dashboard sections controlled centrally from the tenant’s Django Admin record.
+- Runtime sidebar category/item ordering from `/api/v1/tenant-config/`; changing it does not require redeployment.
 - Daily enabled modules in primary navigation.
 - Website/configuration tools under Settings.
 - Dedicated pages, posts, navigation, media, members, and profile screens.

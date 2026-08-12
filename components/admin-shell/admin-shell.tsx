@@ -17,22 +17,12 @@ import { resolveMediaUrl } from "@/lib/media-url";
 import { moduleExperience, modulePrimaryPath } from "@/lib/module-experience";
 import { cn } from "@/lib/utils";
 
-type NavigationGroup = "Sales" | "Customers" | "Operations" | "Settings";
-interface NavigationLink { href: string; label: string; icon: LucideIcon; group?: NavigationGroup; }
+interface NavigationLink { href: string; label: string; icon: LucideIcon; }
+interface NavigationGroup { label: string; items: NavigationLink[]; }
 
-const baseLinks: NavigationLink[] = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge },
-  { href: "/settings", label: "Settings", icon: Settings, group: "Settings" },
-];
+const dashboardLink: NavigationLink = { href: "/dashboard", label: "Dashboard", icon: Gauge };
+const settingsLink: NavigationLink = { href: "/settings", label: "Settings", icon: Settings };
 const settingsOnlyModules = new Set(["website_pages", "media_library", "user_management", "blog", "settings", "seo_management", "gallery", "faq", "document_management", "notifications", "analytics"]);
-const moduleGroups: Record<NavigationGroup, Set<string>> = {
-  Sales: new Set(["product_catalog", "orders", "payments", "offers", "quotation", "invoice", "subscription", "membership"]),
-  Customers: new Set(["contact_management", "customer_management", "crm", "reviews"]),
-  Operations: new Set(["inventory", "delivery", "booking", "service_catalog", "team_management", "location_management", "events", "patient_records", "room_management", "admissions", "student_management", "case_management", "menu_management", "property_listings"]),
-  Settings: new Set(),
-};
-const navigationGroups = Object.keys(moduleGroups) as NavigationGroup[];
-function groupForModule(moduleKey: string): NavigationGroup { return navigationGroups.find((group) => moduleGroups[group].has(moduleKey)) ?? "Operations"; }
 
 const routeLabels: Record<string, string> = {
   pages: "Pages",
@@ -84,23 +74,62 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [navQuery, setNavQuery] = useState("");
 
-  useEffect(() => { if (ready && !access) router.replace("/login"); }, [ready, access, router]);
+  useEffect(() => {
+    if (!ready || access) return;
+    const reason = window.sessionStorage.getItem("cms-auth-reason");
+    router.replace(
+      reason === "session-expired" || reason === "session-unavailable"
+        ? `/login?reason=${reason}`
+        : "/login",
+    );
+  }, [ready, access, router]);
   useEffect(() => setMobileOpen(false), [pathname]);
   useEffect(() => { setCollapsed(window.localStorage.getItem("cms-sidebar-collapsed") === "true"); }, []);
   function toggleCollapsed() { setCollapsed((current) => { const next = !current; window.localStorage.setItem("cms-sidebar-collapsed", String(next)); return next; }); }
 
-  const navigation = useMemo(() => {
-    const modules: NavigationLink[] = config.enabled_modules.filter((key) => !settingsOnlyModules.has(key)).map((key) => { const experience = moduleExperience(key); return { href: modulePrimaryPath(key), label: experience.label, icon: experience.icon, group: groupForModule(key) }; });
-    return [...baseLinks, ...modules];
-  }, [config.enabled_modules]);
+  const sidebar = useMemo(() => {
+    const linksByKey = new Map(
+      config.enabled_modules
+        .filter((key) => !settingsOnlyModules.has(key))
+        .map((key) => {
+          const experience = moduleExperience(key);
+          return [key, { href: modulePrimaryPath(key), label: experience.label, icon: experience.icon }] as const;
+        }),
+    );
+    const seen = new Set<string>();
+    const groups: NavigationGroup[] = [];
+    for (const category of config.sidebar_navigation) {
+      const items: NavigationLink[] = [];
+      for (const key of category.items) {
+        if (key === "settings" && !seen.has(key)) {
+          items.push(settingsLink);
+          seen.add(key);
+          continue;
+        }
+        const link = linksByKey.get(key);
+        if (link && !seen.has(key)) {
+          items.push(link);
+          seen.add(key);
+        }
+      }
+      if (items.length) groups.push({ label: category.label, items });
+    }
+    const missing = [...linksByKey].filter(([key]) => !seen.has(key)).map(([, link]) => link);
+    if (missing.length) {
+      const operations = groups.find((group) => group.label === "Operations");
+      if (operations) operations.items.push(...missing);
+      else groups.push({ label: "Operations", items: missing });
+    }
+    if (!seen.has("settings")) groups.push({ label: "Settings", items: [settingsLink] });
+    return { groups, navigation: [dashboardLink, ...groups.flatMap((group) => group.items)] };
+  }, [config.enabled_modules, config.sidebar_navigation]);
 
   if (!ready || !access) return <div className="grid min-h-screen place-items-center"><div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /><span className="sr-only">Loading workspace</span></div>;
 
   const normalizedQuery = navQuery.trim().toLowerCase();
-  const current = navigation.filter((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))).sort((a, b) => b.href.length - a.href.length)[0];
-  const grouped = navigationGroups.map((group) => ({ group, items: navigation.filter((item) => item.group === group && (!normalizedQuery || item.label.toLowerCase().includes(normalizedQuery))) }));
-  const dashboard = navigation.find((item) => item.href === "/dashboard");
-  const nav = (isCollapsed: boolean, close?: () => void) => <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation">{dashboard && (!normalizedQuery || dashboard.label.toLowerCase().includes(normalizedQuery)) ? <NavItem item={dashboard} active={pathname === dashboard.href} collapsed={isCollapsed} onNavigate={close} /> : null}{grouped.map(({ group, items }) => items.length ? <section key={group} className="mt-4"><h2 className={cn("mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", isCollapsed && "sr-only")}>{group}</h2><div className="space-y-0.5">{items.map((item) => <NavItem key={item.href} item={item} active={pathname === item.href || pathname.startsWith(`${item.href}/`)} collapsed={isCollapsed} onNavigate={close} />)}</div></section> : null)}{normalizedQuery && grouped.every(({ items }) => !items.length) ? <p className="px-3 py-6 text-center text-xs text-muted-foreground">No matching tools</p> : null}</nav>;
+  const current = sidebar.navigation.filter((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))).sort((a, b) => b.href.length - a.href.length)[0];
+  const grouped = sidebar.groups.map((group) => ({ ...group, items: group.items.filter((item) => !normalizedQuery || item.label.toLowerCase().includes(normalizedQuery)) }));
+  const nav = (isCollapsed: boolean, close?: () => void) => <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation">{!normalizedQuery || dashboardLink.label.toLowerCase().includes(normalizedQuery) ? <NavItem item={dashboardLink} active={pathname === dashboardLink.href} collapsed={isCollapsed} onNavigate={close} /> : null}{grouped.map(({ label, items }) => items.length ? <section key={label} className="mt-4"><h2 className={cn("mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", isCollapsed && "sr-only")}>{label}</h2><div className="space-y-0.5">{items.map((item) => <NavItem key={item.href} item={item} active={pathname === item.href || pathname.startsWith(`${item.href}/`)} collapsed={isCollapsed} onNavigate={close} />)}</div></section> : null)}{normalizedQuery && !dashboardLink.label.toLowerCase().includes(normalizedQuery) && grouped.every(({ items }) => !items.length) ? <p className="px-3 py-6 text-center text-xs text-muted-foreground">No matching tools</p> : null}</nav>;
   const brandName = config.admin_theme.brand_name || config.name;
   const sidebarProps = { brandName, workspaceName: config.name, logoUrl: config.admin_theme.logo_url, query: navQuery, onQueryChange: setNavQuery, supportUrl: config.admin_theme.support_url, role, onLogout: () => void logout() };
   const sidebarRight = config.admin_theme.sidebar_position === "right";

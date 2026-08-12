@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileUp, LoaderCircle, Plus, Tag, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   addAdminRecordAttachment,
   addAdminRecordNote,
@@ -12,6 +13,7 @@ import {
 import type { RecordContext } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
+import { ErrorState } from "@/components/admin/error-state";
 
 const emptyContext: RecordContext = {
   tags: [],
@@ -38,19 +40,35 @@ export function ModuleRecordContext({
   const [assignedTo, setAssignedTo] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
   const fileInput = useRef<HTMLInputElement>(null);
+  const refreshRequest = useRef(0);
 
   const refresh = useCallback(async () => {
+    const requestId = ++refreshRequest.current;
     setLoading(true);
+    setError(undefined);
     try {
-      setContext(await getAdminRecordContext(endpoint, slug));
+      const next = await getAdminRecordContext(endpoint, slug);
+      if (requestId === refreshRequest.current) setContext(next);
+    } catch (cause) {
+      if (requestId === refreshRequest.current)
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Internal context could not be loaded.",
+        );
     } finally {
-      setLoading(false);
+      if (requestId === refreshRequest.current) setLoading(false);
     }
   }, [endpoint, slug]);
 
   useEffect(() => {
+    setContext(emptyContext);
     void refresh();
+    return () => {
+      refreshRequest.current += 1;
+    };
   }, [refresh]);
 
   async function addTag() {
@@ -61,6 +79,8 @@ export function ModuleRecordContext({
       await addAdminRecordTag(endpoint, slug, { name });
       setTagName("");
       await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Tag could not be added.");
     } finally {
       setBusy(false);
     }
@@ -71,6 +91,8 @@ export function ModuleRecordContext({
     try {
       await removeAdminRecordTag(endpoint, slug, tagSlug);
       await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Tag could not be removed.");
     } finally {
       setBusy(false);
     }
@@ -88,6 +110,8 @@ export function ModuleRecordContext({
       setNote("");
       setAssignedTo("");
       await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Note could not be added.");
     } finally {
       setBusy(false);
     }
@@ -100,6 +124,8 @@ export function ModuleRecordContext({
       await addAdminRecordAttachment(endpoint, slug, file, file.name);
       if (fileInput.current) fileInput.current.value = "";
       await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Attachment could not be uploaded.");
     } finally {
       setBusy(false);
     }
@@ -111,6 +137,18 @@ export function ModuleRecordContext({
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <LoaderCircle className="size-4 animate-spin" /> Loading record context
         </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="border-t pt-7">
+        <ErrorState
+          title="Internal context unavailable"
+          description={error}
+          retry={() => void refresh()}
+        />
       </section>
     );
   }

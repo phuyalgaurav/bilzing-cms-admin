@@ -52,10 +52,12 @@ export function MediaManager() {
   const [deleteTarget, setDeleteTarget] = useState<MediaRecord>();
   const [metadataText, setMetadataText] = useState("{}");
   const [saving, setSaving] = useState(false);
+  const loadRequest = useRef(0);
   const pendingPreview = useMemo(() => pendingFile?.type.startsWith("image/") ? URL.createObjectURL(pendingFile) : "", [pendingFile]);
   useEffect(() => () => { if (pendingPreview) URL.revokeObjectURL(pendingPreview); }, [pendingPreview]);
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequest.current;
     setLoading(true);
     try {
       const endpoint = await getAdminResourceEndpoint("media_library", "media");
@@ -64,14 +66,17 @@ export function MediaManager() {
       const value = await apiFetch<Paginated<MediaRecord> | MediaRecord[]>(
         `${adminModulePath(endpoint)}?${query}`,
       );
-      setItems(Array.isArray(value) ? value : value.results);
-      setError("");
+      if (requestId === loadRequest.current) {
+        setItems(Array.isArray(value) ? value : value.results);
+        setError("");
+      }
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Media could not be loaded.",
-      );
+      if (requestId === loadRequest.current)
+        setError(
+          cause instanceof Error ? cause.message : "Media could not be loaded.",
+        );
     } finally {
-      setLoading(false);
+      if (requestId === loadRequest.current) setLoading(false);
     }
   }, [search]);
 

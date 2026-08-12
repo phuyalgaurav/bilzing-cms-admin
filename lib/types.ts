@@ -37,7 +37,16 @@ export interface TenantConfig {
   admin_theme: TenantTheme;
   module_preset: string;
   enabled_modules: string[];
+  sidebar_navigation: SidebarCategory[];
+  dashboard_widgets: DashboardWidget[];
 }
+
+export interface SidebarCategory {
+  label: string;
+  items: string[];
+}
+
+export type DashboardWidget = "stats" | "tools" | "recent";
 
 export interface ContentRecord {
   id?: number | string;

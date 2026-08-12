@@ -1,4 +1,9 @@
-import type { TenantConfig, TenantTheme } from "./types";
+import type {
+  DashboardWidget,
+  SidebarCategory,
+  TenantConfig,
+  TenantTheme,
+} from "./types";
 import { moduleExperiences } from "./module-experience";
 
 export const TENANT_KEY = process.env.NEXT_PUBLIC_TENANT_KEY ?? "";
@@ -16,6 +21,18 @@ const defaultModules = [
   "settings",
 ];
 const demoModules = Object.keys(moduleExperiences);
+
+export const defaultSidebarNavigation: SidebarCategory[] = [
+  { label: "Sales", items: ["product_catalog", "orders", "payments", "offers", "quotation", "invoice", "subscription", "membership"] },
+  { label: "Customers", items: ["contact_management", "customer_management", "crm", "reviews"] },
+  { label: "Operations", items: ["inventory", "delivery", "booking", "service_catalog", "team_management", "location_management", "events", "patient_records", "room_management", "admissions", "student_management", "case_management", "menu_management", "property_listings"] },
+  { label: "Settings", items: ["settings"] },
+];
+export const defaultDashboardWidgets: DashboardWidget[] = [
+  "stats",
+  "tools",
+  "recent",
+];
 
 function parseEnabledModules(fallback = defaultModules) {
   try {
@@ -147,6 +164,8 @@ export async function fetchTenantConfig(): Promise<TenantConfig> {
       module_preset:
         process.env.NEXT_PUBLIC_MODULE_PRESET ?? "general_business",
       enabled_modules: parseEnabledModules(demoModules),
+      sidebar_navigation: defaultSidebarNavigation,
+      dashboard_widgets: defaultDashboardWidgets,
       admin_theme: normalizeTheme({
         brand_name: "Bilzing Content Studio",
         primary_color: "#171717",
@@ -162,5 +181,14 @@ export async function fetchTenantConfig(): Promise<TenantConfig> {
   const config = (await response.json()) as TenantConfig;
   if (config.tenant_key !== TENANT_KEY)
     throw new Error("Tenant configuration mismatch.");
-  return { ...config, admin_theme: normalizeTheme(config.admin_theme) };
+  return {
+    ...config,
+    admin_theme: normalizeTheme(config.admin_theme),
+    sidebar_navigation: Array.isArray(config.sidebar_navigation)
+      ? config.sidebar_navigation
+      : defaultSidebarNavigation,
+    dashboard_widgets: Array.isArray(config.dashboard_widgets)
+      ? config.dashboard_widgets
+      : defaultDashboardWidgets,
+  };
 }
