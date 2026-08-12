@@ -339,12 +339,74 @@ function memberResponse(path: string, init: RequestInit, data: DemoStore) {
   return { handled: Boolean(member), value: member, member };
 }
 
+function demoAnalyticsSummary(data: DemoStore, days: number) {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - days);
+  const trend = Array.from({ length: days }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(date.getDate() + index + 1);
+    const wave = Math.max(2, Math.round(18 + Math.sin(index / 2.4) * 7 + index * 0.18));
+    return {
+      date: date.toISOString().slice(0, 10),
+      visitors: wave,
+      page_views: Math.round(wave * 1.8),
+      conversions: index % 4 === 0 ? 3 : index % 3 === 0 ? 2 : 1,
+      module_activity: index % 5 === 0 ? 4 : index % 2 === 0 ? 2 : 1,
+    };
+  });
+  const modules = demoModuleDirectory
+    .filter((module) => module.key !== "analytics")
+    .map((module, moduleIndex) => {
+      const resources = module.resources.map((resource) => {
+        const records = data.records[resource.admin_endpoint] ?? [];
+        return { name: titleCase(resource.key), total: records.length, created: Math.min(records.length, moduleIndex % 3) };
+      });
+      const records = module.resources.flatMap((resource) => data.records[resource.admin_endpoint] ?? []);
+      const statuses = new Map<string, number>();
+      for (const record of records) {
+        const status = String(record.operational_status ?? record.status ?? "active");
+        statuses.set(status, (statuses.get(status) ?? 0) + 1);
+      }
+      const created = resources.reduce((sum, resource) => sum + resource.created, 0);
+      return {
+        key: module.key,
+        label: module.name,
+        description: module.description,
+        total: records.length,
+        created,
+        previous_created: Math.max(0, created - 1),
+        change_percent: created ? 25 : 0,
+        published: records.filter((record) => record.status === "published").length,
+        statuses: [...statuses].map(([status, count]) => ({ status, count })),
+        resources,
+        value_metric: null,
+      };
+    });
+  const visitors = trend.reduce((sum, point) => sum + point.visitors, 0);
+  const pageViews = trend.reduce((sum, point) => sum + point.page_views, 0);
+  const conversions = trend.reduce((sum, point) => sum + point.conversions, 0);
+  return {
+    period: { days, start: start.toISOString(), end: end.toISOString() },
+    totals: { visitors, sessions: Math.round(visitors * 1.12), page_views: pageViews, conversions, conversion_rate: Number(((conversions / visitors) * 100).toFixed(1)), bounce_rate: 31.4 },
+    trend,
+    top_pages: [{ path: "/", page_title: "Home", views: Math.round(pageViews * 0.58), visitors: Math.round(visitors * 0.62) }],
+    sources: [{ source: "Direct", visits: Math.round(visitors * 0.54), visitors: Math.round(visitors * 0.5) }],
+    funnel: [{ event_name: "contact_submitted", count: conversions }],
+    recent_conversions: [],
+    modules,
+    module_totals: { records: modules.reduce((sum, module) => sum + module.total, 0), created: modules.reduce((sum, module) => sum + module.created, 0), active_modules: modules.length },
+  };
+}
+
 /** Browser-local implementation of the Django admin module API for standalone demos. */
 export async function demoModuleFetch<T>(path: string, init: RequestInit): Promise<{ handled: boolean; value?: T }> {
   const parsed = new URL(path, "http://demo.local");
   if (parsed.pathname === "/api/v1/admin/modules/")
     return { handled: true, value: demoModuleDirectory as T };
   const data = store();
+  if (parsed.pathname === "/api/v1/admin/analytics/summary/")
+    return { handled: true, value: demoAnalyticsSummary(data, Number(parsed.searchParams.get("days") ?? 30)) as T };
   const method = init.method ?? "GET";
   if (parsed.pathname.startsWith("/api/v1/admin/members/")) {
     const result = memberResponse(path, init, data);

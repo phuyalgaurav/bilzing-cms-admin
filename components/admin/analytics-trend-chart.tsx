@@ -2,9 +2,11 @@
 
 import { format, parseISO } from "date-fns";
 import {
-  Area,
-  AreaChart,
+  Bar,
+  ComposedChart,
   CartesianGrid,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,19 +18,14 @@ interface TrendPoint {
   visitors: number;
   page_views: number;
   conversions: number;
+  module_activity: number;
 }
 
-export function AnalyticsTrendChart({ data }: { data: TrendPoint[] }) {
+export function AnalyticsTrendChart({ data, includeModuleActivity = false }: { data: TrendPoint[]; includeModuleActivity?: boolean }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ left: -18, right: 8, top: 8 }}>
-        <defs>
-          <linearGradient id="visitorFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="var(--brand)" stopOpacity={0.22} />
-            <stop offset="95%" stopColor="var(--brand)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
+    <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 800, height: 288 }}>
+      <ComposedChart data={data} margin={{ left: -18, right: 8, top: 8, bottom: 0 }}>
+        <CartesianGrid vertical={false} stroke="var(--border)" />
         <XAxis
           dataKey="date"
           axisLine={false}
@@ -50,25 +47,45 @@ export function AnalyticsTrendChart({ data }: { data: TrendPoint[] }) {
             borderRadius: 8,
             boxShadow: "none",
             fontSize: 12,
+            background: "var(--popover)",
           }}
         />
-        <Area
-          type="monotone"
+        <Legend
+          verticalAlign="top"
+          align="right"
+          iconType="circle"
+          iconSize={7}
+          wrapperStyle={{ fontSize: 11, paddingBottom: 12 }}
+        />
+        <Bar
+          dataKey="page_views"
+          name="Page views"
+          fill="var(--muted-foreground)"
+          fillOpacity={0.18}
+          radius={[2, 2, 0, 0]}
+          maxBarSize={18}
+        />
+        {includeModuleActivity ? <Bar dataKey="module_activity" name="New module records" fill="var(--brand)" fillOpacity={0.3} radius={[2, 2, 0, 0]} maxBarSize={18} /> : null}
+        <Line
+          type="linear"
           dataKey="visitors"
           name="Visitors"
           stroke="var(--brand)"
-          fill="url(#visitorFill)"
+          fill="none"
           strokeWidth={2}
+          dot={false}
+          activeDot={{ r: 3 }}
         />
-        <Area
-          type="monotone"
+        <Line
+          type="linear"
           dataKey="conversions"
           name="Conversions"
           stroke="var(--foreground)"
-          fill="transparent"
+          fill="none"
           strokeWidth={1.5}
+          dot={false}
         />
-      </AreaChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

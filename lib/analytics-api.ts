@@ -17,6 +17,7 @@ export interface AnalyticsSummary {
     visitors: number;
     page_views: number;
     conversions: number;
+    module_activity: number;
   }>;
   top_pages: Array<{
     path: string;
@@ -38,6 +39,26 @@ export interface AnalyticsSummary {
     utm_source: string;
     metadata: Record<string, unknown>;
   }>;
+  module_totals: {
+    records: number;
+    created: number;
+    active_modules: number;
+  };
+  modules: ModuleAnalytics[];
+}
+
+export interface ModuleAnalytics {
+  key: string;
+  label: string;
+  description: string;
+  total: number;
+  created: number;
+  previous_created: number;
+  change_percent: number | null;
+  published: number;
+  statuses: Array<{ status: string; count: number }>;
+  resources: Array<{ name: string; total: number; created: number }>;
+  value_metric: { label: string; value: number } | null;
 }
 
 export function getAnalyticsSummary(days: AnalyticsPeriod) {

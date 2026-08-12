@@ -22,11 +22,21 @@ export interface TenantTheme {
   surface_color?: string;
   text_color?: string;
   muted_text_color?: string;
+  border_color?: string;
+  brand_contrast_color?: string;
+  danger_color?: string;
   font_family?: string;
   heading_font_family?: string;
   border_radius?: string;
   sidebar_position?: "left" | "right";
   sidebar_style?: "solid" | "soft";
+  content_width?: "standard" | "wide" | "full";
+  density?: "compact" | "comfortable" | "spacious";
+  show_workspace_name?: boolean;
+  show_breadcrumbs?: boolean;
+  show_sidebar_search?: boolean;
+  default_sidebar_collapsed?: boolean;
+  login_message?: string;
   login_background_url?: string;
   support_url?: string;
 }

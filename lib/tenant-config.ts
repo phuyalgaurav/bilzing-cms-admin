@@ -58,11 +58,21 @@ export const neutralTheme: Required<TenantTheme> = {
   surface_color: "#ffffff",
   text_color: "#171717",
   muted_text_color: "#666666",
+  border_color: "#e4e4e7",
+  brand_contrast_color: "#ffffff",
+  danger_color: "#b91c1c",
   font_family: "Geist",
   heading_font_family: "Geist",
   border_radius: "0.75rem",
   sidebar_position: "left",
   sidebar_style: "solid",
+  content_width: "wide",
+  density: "comfortable",
+  show_workspace_name: true,
+  show_breadcrumbs: true,
+  show_sidebar_search: true,
+  default_sidebar_collapsed: false,
+  login_message: "",
   login_background_url: "",
   support_url: "",
 };
@@ -107,6 +117,9 @@ export function normalizeTheme(theme?: TenantTheme): TenantTheme {
     "surface_color",
     "text_color",
     "muted_text_color",
+    "border_color",
+    "brand_contrast_color",
+    "danger_color",
   ] as const) {
     if (!isColor(normalized[key])) normalized[key] = neutralTheme[key];
   }
@@ -127,6 +140,10 @@ export function normalizeTheme(theme?: TenantTheme): TenantTheme {
     normalized.sidebar_position = "left";
   if (!["solid", "soft"].includes(normalized.sidebar_style ?? ""))
     normalized.sidebar_style = "solid";
+  if (!["standard", "wide", "full"].includes(normalized.content_width ?? ""))
+    normalized.content_width = "wide";
+  if (!["compact", "comfortable", "spacious"].includes(normalized.density ?? ""))
+    normalized.density = "comfortable";
   return normalized;
 }
 
@@ -140,12 +157,16 @@ export function applyTheme(theme: TenantTheme) {
     "--surface": theme.surface_color,
     "--foreground": theme.text_color,
     "--muted-foreground": theme.muted_text_color,
+    "--border": theme.border_color,
+    "--brand-contrast": theme.brand_contrast_color,
+    "--destructive": theme.danger_color,
     "--radius": theme.border_radius,
     "--font-body": theme.font_family,
     "--font-heading": theme.heading_font_family,
   };
   for (const [key, value] of Object.entries(values))
     if (value) root.style.setProperty(key, value);
+  root.dataset.density = theme.density ?? "comfortable";
   let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!favicon) {
     favicon = document.createElement("link");
