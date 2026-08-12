@@ -31,6 +31,7 @@ const routeLabels: Record<string, string> = {
   navigation: "Menus",
   media: "Media library",
   members: "Team access",
+  "role-permissions": "Role permissions",
   profile: "Profile",
   settings: "Settings",
   analytics: "Analytics",

@@ -5,6 +5,7 @@ import type {
   ModuleResourceContract,
   Paginated,
   ResourceField,
+  Role,
   TenantMember,
 } from "./types";
 
@@ -14,7 +15,46 @@ const NOW = "2026-08-09T09:00:00.000Z";
 type DemoStore = {
   records: Record<string, ModuleRecord[]>;
   members: TenantMember[];
+  rolePolicies?: DemoRolePolicy[];
 };
+
+type DemoRolePolicy = {
+  key: Exclude<Role, "super_admin">;
+  label: string;
+  modules: string[];
+  actions: string[];
+};
+
+const demoRoles: Array<[DemoRolePolicy["key"], string]> = [
+  ["viewer", "Viewer"], ["editor", "Editor"], ["staff", "Staff"],
+  ["support", "Support"], ["sales", "Sales"], ["accountant", "Accountant"],
+  ["manager", "Manager"], ["administrator", "Administrator"],
+];
+const demoActions = [
+  ["view", "View records"], ["create", "Create records"], ["edit", "Edit records"],
+  ["delete", "Delete records"], ["publish", "Publish and unpublish"],
+  ["workflow", "Change workflow status"], ["bulk", "Run bulk actions"],
+  ["import", "Import data"], ["export", "Export data"],
+] as const;
+
+function initialRolePolicies(): DemoRolePolicy[] {
+  const modules = demoModuleDirectory.map((module) => module.key);
+  return demoRoles.map(([key, label]) => ({
+    key,
+    label,
+    modules,
+    actions: key === "viewer" ? ["view", "export"] : demoActions.map(([action]) => action),
+  }));
+}
+
+function demoRolePolicyPayload(data: DemoStore) {
+  return {
+    roles: data.rolePolicies ?? initialRolePolicies(),
+    available_modules: demoModuleDirectory.map((module) => ({ key: module.key, label: module.name })),
+    available_actions: demoActions.map(([key, label]) => ({ key, label })),
+    protected_role: { key: "super_admin", label: "Super Admin", detail: "Always has full access and cannot be restricted." },
+  };
+}
 
 const workflowFor = (moduleKey: string) => {
   if (["orders", "delivery", "booking", "membership", "crm"].includes(moduleKey))
@@ -262,6 +302,7 @@ function initialStore(): DemoStore {
         created_at: NOW,
       },
     ],
+    rolePolicies: initialRolePolicies(),
   };
 }
 
@@ -405,6 +446,14 @@ export async function demoModuleFetch<T>(path: string, init: RequestInit): Promi
   if (parsed.pathname === "/api/v1/admin/modules/")
     return { handled: true, value: demoModuleDirectory as T };
   const data = store();
+  if (parsed.pathname === "/api/v1/admin/role-policies/") {
+    if ((init.method ?? "GET") === "PUT") {
+      const payload = await body(init);
+      data.rolePolicies = payload.roles as DemoRolePolicy[];
+      save(data);
+    }
+    return { handled: true, value: demoRolePolicyPayload(data) as T };
+  }
   if (parsed.pathname === "/api/v1/admin/analytics/summary/")
     return { handled: true, value: demoAnalyticsSummary(data, Number(parsed.searchParams.get("days") ?? 30)) as T };
   const method = init.method ?? "GET";
