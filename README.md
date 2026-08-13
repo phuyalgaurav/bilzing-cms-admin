@@ -63,6 +63,38 @@ The authenticated backend response from `/api/v1/admin/modules/` controls
 canonical endpoints, fields, workflows, and `allowed_actions`. The backend is
 authoritative for RBAC.
 
+## Analytics dashboard
+
+The Analytics page reads the authenticated tenant-scoped summary endpoint and
+shows current-versus-previous traffic, visitor quality, acquisition, devices,
+campaigns, landing pages, conversions, value, journey stages, and operational
+record activity for every enabled CMS module. Periods are 7, 30, 90, 180, and
+365 days.
+
+The dashboard does not collect browser events itself. Consumer sites discover
+and write `analytics/events`; this admin only reads aggregated reports. Empty
+traffic is therefore an integration signal, not a reason to fabricate chart
+data. Use the backend `docs/analytics.md` checklist to verify capability,
+consumer proxy acceptance, stored events, aggregation, and live rendering.
+
+The chart components use responsive containers and separate traffic and
+conversion scales. When the backend response changes, update
+`lib/analytics-api.ts`, demo data, the dedicated Analytics page, and the compact
+dashboard view together.
+
+## Runtime branding
+
+`NEXT_PUBLIC_ADMIN_THEME` is a deployment fallback only. The live
+`/api/v1/tenant-config/` response is authoritative after startup, and the app
+refreshes it on focus, visibility changes, and a short interval. Logo, colors,
+fonts, density, layout, and favicon updates therefore do not require a new
+deployment. Favicon URLs include a theme revision query so browsers do not keep
+showing a previously cached tenant icon.
+
+Existing generated tenant admins must still be redeployed when this template's
+code changes. A source push updates the template repository; it does not rebuild
+every existing Vercel tenant project.
+
 ## Checks
 
 ```bash

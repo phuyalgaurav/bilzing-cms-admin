@@ -391,8 +391,10 @@ function demoAnalyticsSummary(data: DemoStore, days: number) {
     return {
       date: date.toISOString().slice(0, 10),
       visitors: wave,
+      sessions: Math.round(wave * 1.12),
       page_views: Math.round(wave * 1.8),
       conversions: index % 4 === 0 ? 3 : index % 3 === 0 ? 2 : 1,
+      conversion_rate: Number((((index % 4 === 0 ? 3 : index % 3 === 0 ? 2 : 1) / wave) * 100).toFixed(1)),
       module_activity: index % 5 === 0 ? 4 : index % 2 === 0 ? 2 : 1,
     };
   });
@@ -427,13 +429,65 @@ function demoAnalyticsSummary(data: DemoStore, days: number) {
   const visitors = trend.reduce((sum, point) => sum + point.visitors, 0);
   const pageViews = trend.reduce((sum, point) => sum + point.page_views, 0);
   const conversions = trend.reduce((sum, point) => sum + point.conversions, 0);
+  const sessions = trend.reduce((sum, point) => sum + point.sessions, 0);
+  const totals = {
+    visitors,
+    new_visitors: Math.round(visitors * 0.76),
+    returning_visitors: Math.round(visitors * 0.24),
+    sessions,
+    page_views: pageViews,
+    pages_per_session: Number((pageViews / sessions).toFixed(2)),
+    conversions,
+    converted_visitors: conversions,
+    conversion_rate: Number(((conversions / visitors) * 100).toFixed(1)),
+    bounce_rate: 31.4,
+    engagement_rate: 68.6,
+    average_session_seconds: 154,
+  };
+  const previousTotals = Object.fromEntries(
+    Object.entries(totals).map(([key, value]) => [key, Number((value * 0.88).toFixed(2))]),
+  );
+  const comparison = Object.fromEntries(
+    ["visitors", "sessions", "page_views", "converted_visitors", "conversion_rate", "engagement_rate", "average_session_seconds"].map((key) => [key, { current: totals[key as keyof typeof totals], previous: previousTotals[key], change_percent: 13.6 }]),
+  );
   return {
     period: { days, start: start.toISOString(), end: end.toISOString() },
-    totals: { visitors, sessions: Math.round(visitors * 1.12), page_views: pageViews, conversions, conversion_rate: Number(((conversions / visitors) * 100).toFixed(1)), bounce_rate: 31.4 },
+    totals,
+    previous_totals: previousTotals,
+    comparison,
     trend,
-    top_pages: [{ path: "/", page_title: "Home", views: Math.round(pageViews * 0.58), visitors: Math.round(visitors * 0.62) }],
-    sources: [{ source: "Direct", visits: Math.round(visitors * 0.54), visitors: Math.round(visitors * 0.5) }],
-    funnel: [{ event_name: "contact_submitted", count: conversions }],
+    top_pages: [
+      { path: "/", page_title: "Home", views: Math.round(pageViews * 0.48), visitors: Math.round(visitors * 0.52) },
+      { path: "/menu", page_title: "Menu", views: Math.round(pageViews * 0.31), visitors: Math.round(visitors * 0.37) },
+      { path: "/custom-cakes", page_title: "Custom cakes", views: Math.round(pageViews * 0.17), visitors: Math.round(visitors * 0.21) },
+    ],
+    sources: [
+      { source: "Direct", visits: Math.round(sessions * 0.46), visitors: Math.round(visitors * 0.44) },
+      { source: "Instagram", visits: Math.round(sessions * 0.31), visitors: Math.round(visitors * 0.3) },
+      { source: "Google", visits: Math.round(sessions * 0.23), visitors: Math.round(visitors * 0.24) },
+    ],
+    devices: [
+      { device: "Mobile", sessions: Math.round(sessions * 0.72), visitors: Math.round(visitors * 0.7) },
+      { device: "Desktop", sessions: Math.round(sessions * 0.24), visitors: Math.round(visitors * 0.25) },
+      { device: "Tablet", sessions: Math.round(sessions * 0.04), visitors: Math.round(visitors * 0.05) },
+    ],
+    campaigns: [{ campaign: "Fresh favourites", source: "Instagram", sessions: Math.round(sessions * 0.2), visitors: Math.round(visitors * 0.19) }],
+    landing_pages: [
+      { path: "/", sessions: Math.round(sessions * 0.56), visitors: Math.round(visitors * 0.55) },
+      { path: "/menu", sessions: Math.round(sessions * 0.29), visitors: Math.round(visitors * 0.3) },
+    ],
+    funnel: [
+      { event_name: "order_requested", count: Math.round(conversions * 0.54) },
+      { event_name: "phone_clicked", count: Math.round(conversions * 0.28) },
+      { event_name: "directions_clicked", count: Math.round(conversions * 0.18) },
+    ],
+    journey: [
+      { stage: "Visitors", count: visitors },
+      { stage: "Engaged visitors", count: Math.round(visitors * 0.69) },
+      { stage: "Converted visitors", count: conversions },
+    ],
+    events: [{ event_name: "page_view", count: pageViews }, { event_name: "engagement", count: Math.round(visitors * 0.69) }],
+    conversion_value: [{ currency: "NPR", value: conversions * 1250, conversions }],
     recent_conversions: [],
     modules,
     module_totals: { records: modules.reduce((sum, module) => sum + module.total, 0), created: modules.reduce((sum, module) => sum + module.created, 0), active_modules: modules.length },

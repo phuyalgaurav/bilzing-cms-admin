@@ -75,8 +75,8 @@ function TenantProvider({ children }: { children: React.ReactNode }) {
   const currentTheme = useRef<TenantTheme>(initialConfig.admin_theme);
   const bootstrapStarted = useRef(false);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const loadConfig = useCallback(async (showLoading: boolean) => {
+    if (showLoading) setLoading(true);
     try {
       const next = await fetchTenantConfig();
       currentTheme.current = next.admin_theme;
@@ -92,15 +92,34 @@ function TenantProvider({ children }: { children: React.ReactNode }) {
       );
       applyTheme(currentTheme.current);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
+
+  const refresh = useCallback(async () => {
+    await loadConfig(true);
+  }, [loadConfig]);
 
   useEffect(() => {
     if (bootstrapStarted.current) return;
     bootstrapStarted.current = true;
-    void refresh();
-  }, [refresh]);
+    void loadConfig(true);
+  }, [loadConfig]);
+
+  useEffect(() => {
+    const revalidate = () => void loadConfig(false);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") revalidate();
+    };
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const interval = window.setInterval(revalidate, 60_000);
+    return () => {
+      window.removeEventListener("focus", revalidate);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [loadConfig]);
 
   const value = useMemo<TenantContextValue>(
     () => ({ config, loading, error, refresh }),

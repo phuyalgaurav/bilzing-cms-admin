@@ -149,6 +149,14 @@ export function normalizeTheme(theme?: TenantTheme): TenantTheme {
 
 export function applyTheme(theme: TenantTheme) {
   const root = document.documentElement;
+  const fontValue = (family: string | undefined) => {
+    const knownFonts: Record<string, string> = {
+      Geist: "var(--font-geist)",
+      Inter: "var(--font-inter)",
+      Fraunces: "var(--font-fraunces)",
+    };
+    return family ? (knownFonts[family] ?? family) : undefined;
+  };
   const values: Record<string, string | undefined> = {
     "--brand": theme.primary_color,
     "--secondary": theme.secondary_color,
@@ -157,24 +165,55 @@ export function applyTheme(theme: TenantTheme) {
     "--surface": theme.surface_color,
     "--foreground": theme.text_color,
     "--muted-foreground": theme.muted_text_color,
+    "--muted":
+      theme.surface_color && theme.text_color
+        ? `color-mix(in srgb, ${theme.surface_color} 92%, ${theme.text_color})`
+        : undefined,
     "--border": theme.border_color,
     "--brand-contrast": theme.brand_contrast_color,
     "--destructive": theme.danger_color,
     "--radius": theme.border_radius,
-    "--font-body": theme.font_family,
-    "--font-heading": theme.heading_font_family,
+    "--font-body": fontValue(theme.font_family),
+    "--font-heading": fontValue(theme.heading_font_family),
   };
   for (const [key, value] of Object.entries(values))
     if (value) root.style.setProperty(key, value);
   root.dataset.density = theme.density ?? "comfortable";
-  let favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-  if (!favicon) {
-    favicon = document.createElement("link");
-    favicon.rel = "icon";
-    document.head.appendChild(favicon);
-  }
-  favicon.href = theme.favicon_url || "/favicon.svg";
+  applyFavicon(theme.favicon_url || "/favicon.svg", theme);
   document.title = theme.brand_name || "Content Studio";
+}
+
+function themeRevision(theme: TenantTheme) {
+  const value = JSON.stringify(theme);
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+export function applyFavicon(source: string, theme: TenantTheme = {}) {
+  const url = new URL(source, window.location.origin);
+  url.searchParams.set("cms-theme", themeRevision(theme));
+  document
+    .querySelectorAll<HTMLLinkElement>(
+      'link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]',
+    )
+    .forEach((link) => link.remove());
+
+  const icon = document.createElement("link");
+  icon.rel = "icon";
+  icon.href = url.toString();
+  icon.sizes = "any";
+  if (/\.ico$/i.test(url.pathname)) icon.type = "image/x-icon";
+  else if (/\.png$/i.test(url.pathname)) icon.type = "image/png";
+  else if (/\.svg$/i.test(url.pathname)) icon.type = "image/svg+xml";
+  document.head.appendChild(icon);
+
+  const shortcut = icon.cloneNode() as HTMLLinkElement;
+  shortcut.rel = "shortcut icon";
+  document.head.appendChild(shortcut);
 }
 
 export async function fetchTenantConfig(): Promise<TenantConfig> {
@@ -184,7 +223,7 @@ export async function fetchTenantConfig(): Promise<TenantConfig> {
       name: "Bilzing Nepal",
       module_preset:
         process.env.NEXT_PUBLIC_MODULE_PRESET ?? "general_business",
-      enabled_modules: parseEnabledModules(demoModules),
+      enabled_modules: DEMO_MODE ? demoModules : parseEnabledModules(demoModules),
       sidebar_navigation: defaultSidebarNavigation,
       dashboard_widgets: defaultDashboardWidgets,
       admin_theme: normalizeTheme({
