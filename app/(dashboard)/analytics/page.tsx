@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -9,20 +9,15 @@ import {
   ChartNoAxesCombined,
   Clock3,
   Eye,
-  Layers3,
   MousePointerClick,
   RefreshCw,
-  Search,
-  Smartphone,
   Users,
 } from "lucide-react";
 
-import { ModuleAnalyticsCard } from "@/components/admin/module-analytics-card";
 import { PageHeading } from "@/components/admin-shell/page-heading";
 import { useTenant } from "@/components/providers/app-providers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAnalyticsSummary, type AnalyticsPeriod, type AnalyticsSummary } from "@/lib/analytics-api";
@@ -79,7 +74,6 @@ export default function AnalyticsPage() {
   const { config } = useTenant();
   const [days, setDays] = useState<AnalyticsPeriod>(30);
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
@@ -99,13 +93,8 @@ export default function AnalyticsPage() {
     return () => controller.abort();
   }, [days, enabled, revision]);
 
-  const modules = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return (summary?.modules ?? []).filter((module) => !normalized || module.label.toLowerCase().includes(normalized) || module.description.toLowerCase().includes(normalized));
-  }, [query, summary]);
   const totals = summary?.totals;
   const comparison = summary?.comparison;
-  const moduleTotals = summary?.module_totals;
   const journeyMax = Math.max(...(summary?.journey.map((item) => item.count) ?? [1]), 1);
 
   const controls = enabled ? <div className="flex items-center gap-2"><Button variant="outline" size="icon" aria-label="Refresh analytics" onClick={() => setRevision((value) => value + 1)} disabled={loading}><RefreshCw className={cn("size-4", loading && "animate-spin")} /></Button><Select value={String(days)} onValueChange={(value) => setDays(Number(value) as AnalyticsPeriod)}><SelectTrigger aria-label="Analytics period" className="w-40"><SelectValue /></SelectTrigger><SelectContent>{periods.map((period) => <SelectItem key={period} value={String(period)}>Last {period} days</SelectItem>)}</SelectContent></Select></div> : null;
@@ -138,7 +127,6 @@ export default function AnalyticsPage() {
 
       <section className="mt-7"><div className="mb-4"><h2 className="text-lg font-semibold">Conversion activity</h2><p className="mt-1 text-sm text-muted-foreground">Which actions visitors complete and the total tracked value.</p></div><div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><Card><CardHeader><CardTitle>Conversion actions</CardTitle></CardHeader><CardContent>{loading || !summary ? <Skeleton className="h-52 w-full" /> : <RankedList rows={summary.funnel} labelKey="event_name" valueKey="count" valueLabel="actions" formatLabel={(value) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())} />}</CardContent></Card><Card><CardHeader><CardTitle>Tracked value</CardTitle></CardHeader><CardContent>{summary?.conversion_value.length ? <div className="space-y-4">{summary.conversion_value.map((item) => <div key={item.currency || "unspecified"} className="flex items-end justify-between gap-4"><div><p className="text-xs text-muted-foreground">{item.currency || "No currency"}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{formatNumber.format(Number(item.value))}</p></div><span className="text-xs text-muted-foreground">{item.conversions} valued actions</span></div>)}</div> : <div className="grid min-h-40 place-items-center text-center"><div><MousePointerClick className="mx-auto mb-2 size-5 text-muted-foreground" /><p className="text-sm text-muted-foreground">No conversion values were sent.</p></div></div>}</CardContent></Card></div></section>
 
-      <section className="mt-7"><div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-lg font-semibold">Operational analytics</h2><p className="mt-1 text-sm text-muted-foreground">Record growth, workflow status, and value across enabled modules.</p></div><div className="relative w-full sm:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a module" aria-label="Find a module" className="pl-9" /></div></div><div className="mb-4 flex flex-wrap gap-2 text-xs text-muted-foreground"><span className="rounded-md border bg-card px-2.5 py-1.5"><Layers3 className="mr-1.5 inline size-3.5" />{formatNumber.format(moduleTotals?.records ?? 0)} total records</span><span className="rounded-md border bg-card px-2.5 py-1.5">{formatNumber.format(moduleTotals?.created ?? 0)} created this period</span><span className="rounded-md border bg-card px-2.5 py-1.5">{moduleTotals?.active_modules ?? 0} reporting modules</span></div>{loading ? <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{[1,2,3,4,5,6].map((item) => <Skeleton key={item} className="h-80 w-full" />)}</div> : modules.length ? <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">{modules.map((module) => <ModuleAnalyticsCard key={module.key} module={module} />)}</div> : <Card><CardContent className="grid min-h-44 place-items-center text-center text-sm text-muted-foreground"><div><Smartphone className="mx-auto mb-2 size-5" />No modules match this search.</div></CardContent></Card>}</section>
     </>}
   </>;
 }

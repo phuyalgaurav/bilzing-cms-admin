@@ -8,7 +8,6 @@ import {
   LayoutTemplate,
   Newspaper,
   Settings2,
-  ShieldCheck,
   UsersRound,
 } from "lucide-react";
 import { PageHeading } from "@/components/admin-shell/page-heading";
@@ -124,22 +123,12 @@ export default function SettingsPage() {
             {role === "super_admin" ? (
               <>
                 <Link
-                  href="/members"
+                  href="/team-access"
                   className="flex items-center justify-between rounded-md border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
                 >
                   <span className="flex items-center gap-2">
                     <UsersRound className="size-4 text-muted-foreground" />
                     Team access
-                  </span>
-                  <ChevronRight className="size-4 text-muted-foreground" />
-                </Link>
-                <Link
-                  href="/role-permissions"
-                  className="flex items-center justify-between rounded-md border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
-                >
-                  <span className="flex items-center gap-2">
-                    <ShieldCheck className="size-4 text-muted-foreground" />
-                    Role permissions
                   </span>
                   <ChevronRight className="size-4 text-muted-foreground" />
                 </Link>

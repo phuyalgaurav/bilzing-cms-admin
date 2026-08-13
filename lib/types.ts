@@ -204,6 +204,8 @@ export interface RecordAttachment {
 
 export interface RecordActivity {
   id: number | string;
+  resource_path: string;
+  record_slug: string;
   event: string;
   actor_email: string;
   changes: Record<string, unknown>;

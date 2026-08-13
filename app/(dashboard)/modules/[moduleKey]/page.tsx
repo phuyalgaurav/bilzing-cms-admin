@@ -8,7 +8,7 @@ import { modulePrimaryPath } from "@/lib/module-experience";
 const dedicatedModuleRoutes: Record<string, string> = {
   website_pages: "/pages",
   media_library: "/media",
-  user_management: "/members",
+  user_management: "/team-access",
   blog: "/posts",
 };
 

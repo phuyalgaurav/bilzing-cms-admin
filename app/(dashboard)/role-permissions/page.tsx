@@ -38,7 +38,7 @@ const roleDescriptions: Record<RolePolicy["key"], string> = {
   administrator: "Broad workspace administration without protected Super Admin powers.",
 };
 
-export default function RolePermissionsPage() {
+export function RolePermissionsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { role } = useAuth();
   const canManage = role === "super_admin";
   const [data, setData] = useState<RolePolicyResponse>();
@@ -120,14 +120,14 @@ export default function RolePermissionsPage() {
     }
   }
 
-  if (!canManage) return <><PageHeading title="Role permissions" description="Control what each workspace role can access and do." /><Card><EmptyState icon={ShieldX} title="Super Admin access required" description="Only a Super Admin can view or change workspace role permissions." /></Card></>;
+  if (!canManage) return <>{embedded ? null : <PageHeading title="Role permissions" description="Control what each workspace role can access and do." />}<Card><EmptyState icon={ShieldX} title="Super Admin access required" description="Only a Super Admin can view or change workspace role permissions." /></Card></>;
 
   return <>
-    <PageHeading
+    {embedded ? <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-lg font-semibold">Role permissions</h2><p className="mt-1 text-sm text-muted-foreground">Choose which enabled tools each role can access and which actions it can perform.</p></div><div className="flex gap-2"><Button variant="outline" disabled={!dirty || saving} onClick={() => baseline && setData(structuredClone(baseline))}><RotateCcw className="size-4" />Discard</Button><Button disabled={!dirty || saving} onClick={() => void save()}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}Save changes</Button></div></div> : <PageHeading
       title="Role permissions"
       description="Choose which enabled tools each role can access and which actions it can perform."
       actions={<div className="flex gap-2"><Button variant="outline" disabled={!dirty || saving} onClick={() => baseline && setData(structuredClone(baseline))}><RotateCcw className="size-4" />Discard</Button><Button disabled={!dirty || saving} onClick={() => void save()}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}Save changes</Button></div>}
-    />
+    />}
 
     <div className="mb-5 flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/[0.04] px-4 py-3">
       <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -160,4 +160,8 @@ export default function RolePermissionsPage() {
       </div>
     ) : null}
   </>;
+}
+
+export default function RolePermissionsRoute() {
+  return <RolePermissionsPage />;
 }

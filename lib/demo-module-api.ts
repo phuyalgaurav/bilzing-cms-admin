@@ -4,6 +4,7 @@ import type {
   ModuleRecord,
   ModuleResourceContract,
   Paginated,
+  RecordActivity,
   ResourceField,
   Role,
   TenantMember,
@@ -14,6 +15,7 @@ const NOW = "2026-08-09T09:00:00.000Z";
 
 type DemoStore = {
   records: Record<string, ModuleRecord[]>;
+  activities?: RecordActivity[];
   members: TenantMember[];
   rolePolicies?: DemoRolePolicy[];
 };
@@ -277,15 +279,30 @@ function seededRecord(
 }
 
 function initialStore(): DemoStore {
-  return {
-    records: Object.fromEntries(
+  const records = Object.fromEntries(
       demoModuleDirectory.flatMap((module) =>
         module.resources.map((resource) => [
           resource.admin_endpoint,
           [seededRecord(module.key, resource, 1), seededRecord(module.key, resource, 2)],
         ]),
       ),
-    ),
+    );
+  const initialActivity = demoModuleDirectory.slice(0, 8).map((module, index) => {
+    const resource = module.resources[0];
+    const record = records[resource.admin_endpoint][0];
+    return {
+      id: `demo-activity-${index}`,
+      resource_path: resource.canonical_path ?? resource.key,
+      record_slug: record.slug,
+      event: index % 3 === 0 ? "created" : index % 3 === 1 ? "updated" : "published",
+      actor_email: index % 2 === 0 ? "admin@bilzing.test" : "editor@bilzing.test",
+      changes: index % 3 === 1 ? { title: { from: "Previous title", to: record.title } } : {},
+      created_at: new Date(Date.now() - index * 45 * 60 * 1000).toISOString(),
+    } satisfies RecordActivity;
+  });
+  return {
+    records,
+    activities: initialActivity,
     members: [
       {
         id: "demo-admin",
@@ -303,6 +320,55 @@ function initialStore(): DemoStore {
       },
     ],
     rolePolicies: initialRolePolicies(),
+  };
+}
+
+function demoActivities(data: DemoStore) {
+  data.activities ??= initialStore().activities ?? [];
+  return data.activities;
+}
+
+function recordDemoActivity(
+  data: DemoStore,
+  resource: ModuleResourceContract,
+  record: ModuleRecord,
+  event: string,
+  changes: Record<string, unknown> = {},
+) {
+  demoActivities(data).unshift({
+    id: `demo-activity-${Date.now()}-${Math.random()}`,
+    resource_path: resource.canonical_path ?? resource.key,
+    record_slug: record.slug,
+    event,
+    actor_email: "admin@bilzing.test",
+    changes,
+    created_at: new Date().toISOString(),
+  });
+}
+
+function demoActivityPage(data: DemoStore, search: URLSearchParams) {
+  const allowed = demoActivities(data);
+  const facets = {
+    resource_paths: [...new Set(allowed.map((item) => item.resource_path))].sort(),
+    events: [...new Set(allowed.map((item) => item.event))].sort(),
+    actors: [...new Set(allowed.map((item) => item.actor_email).filter(Boolean))].sort(),
+  };
+  let results = [...allowed];
+  const query = search.get("search")?.trim().toLowerCase();
+  if (query) results = results.filter((item) => JSON.stringify(item).toLowerCase().includes(query));
+  for (const key of ["resource_path", "event", "actor_email"] as const) {
+    const value = search.get(key);
+    if (value) results = results.filter((item) => item[key] === value);
+  }
+  const count = results.length;
+  const page = Math.max(1, Number(search.get("page") ?? 1));
+  const pageSize = Math.max(1, Number(search.get("page_size") ?? 30));
+  return {
+    count,
+    next: page * pageSize < count ? `?page=${page + 1}` : null,
+    previous: page > 1 ? `?page=${page - 1}` : null,
+    results: results.slice((page - 1) * pageSize, page * pageSize),
+    facets,
   };
 }
 
@@ -510,6 +576,8 @@ export async function demoModuleFetch<T>(path: string, init: RequestInit): Promi
   }
   if (parsed.pathname === "/api/v1/admin/analytics/summary/")
     return { handled: true, value: demoAnalyticsSummary(data, Number(parsed.searchParams.get("days") ?? 30)) as T };
+  if (parsed.pathname === "/api/v1/admin/activity/")
+    return { handled: true, value: demoActivityPage(data, parsed.searchParams) as T };
   const method = init.method ?? "GET";
   if (parsed.pathname.startsWith("/api/v1/admin/members/")) {
     const result = memberResponse(path, init, data);
@@ -551,7 +619,7 @@ export async function demoModuleFetch<T>(path: string, init: RequestInit): Promi
   const records = data.records[endpoint] ?? [];
 
   if (remainder.includes("/context"))
-    return { handled: true, value: { tags: [], notes: [], attachments: [], activity: [] } as T };
+    return { handled: true, value: { tags: [], notes: [], attachments: [], activity: demoActivities(data).filter((item) => item.resource_path === (resource.canonical_path ?? resource.key) && item.record_slug === decodeURIComponent(remainder.split("/")[0])) } as T };
   if (remainder.includes("/tags") || remainder.includes("/notes") || remainder.includes("/attachments"))
     return { handled: true, value: { id: `demo-${Date.now()}`, created_at: new Date().toISOString() } as T };
 
@@ -564,6 +632,7 @@ export async function demoModuleFetch<T>(path: string, init: RequestInit): Promi
     else if (action === "archive") record.status = "archived";
     else if (action.startsWith("set-")) record.operational_status = action.slice(4);
     record.updated_at = new Date().toISOString();
+    recordDemoActivity(data, resource, record, action);
     save(data);
     return { handled: true, value: record as T };
   }
@@ -586,18 +655,27 @@ export async function demoModuleFetch<T>(path: string, init: RequestInit): Promi
     };
     records.unshift(created);
     data.records[endpoint] = records;
+    recordDemoActivity(data, resource, created, "created");
     save(data);
     return { handled: true, value: created as T };
   }
   if (index < 0) return { handled: false };
   if (method === "GET") return { handled: true, value: records[index] as T };
   if (method === "DELETE") {
+    recordDemoActivity(data, resource, records[index], "deleted");
     records.splice(index, 1);
     save(data);
     return { handled: true, value: undefined as T };
   }
   if (method === "PATCH" || method === "PUT") {
-    Object.assign(records[index], await body(init), { updated_at: new Date().toISOString() });
+    const payload = await body(init);
+    const changes = Object.fromEntries(
+      Object.entries(payload)
+        .filter(([key, value]) => records[index][key] !== value)
+        .map(([key, value]) => [key, { from: records[index][key], to: value }]),
+    );
+    Object.assign(records[index], payload, { updated_at: new Date().toISOString() });
+    recordDemoActivity(data, resource, records[index], "updated", changes);
     save(data);
     return { handled: true, value: records[index] as T };
   }
