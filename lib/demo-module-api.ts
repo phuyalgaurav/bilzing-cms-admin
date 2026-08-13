@@ -239,6 +239,7 @@ function defaultValue(key: string, position: number): string | number {
   if (/(time|duration)/.test(key)) return position === 1 ? "09:00" : "14:00";
   if (key === "latitude") return position === 1 ? 27.717245 : 27.671;
   if (key === "longitude") return position === 1 ? 85.323959 : 85.4298;
+  if (key === "rating") return position === 1 ? 5 : 4;
   if (/(price|amount|cost|quantity|rating|discount|capacity|stock|level|code)/.test(key)) return position * 100;
   return `Sample ${titleCase(key)} ${position}`;
 }

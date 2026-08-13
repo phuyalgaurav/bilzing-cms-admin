@@ -63,13 +63,19 @@ The authenticated backend response from `/api/v1/admin/modules/` controls
 canonical endpoints, fields, workflows, and `allowed_actions`. The backend is
 authoritative for RBAC.
 
-## Analytics dashboard
+## Dashboard and analytics
+
+`/dashboard` is the default signed-in workspace. It combines a 30-day traffic
+snapshot with recent visitor conversions, actor-attributed admin changes, and
+recent orders and reviews when those tenant modules are enabled. Each section
+links to its full workspace; a failed or disabled optional module does not block
+the rest of the dashboard.
 
 The Analytics page reads the authenticated tenant-scoped summary endpoint and
 shows current-versus-previous traffic, visitor quality, acquisition, devices,
-campaigns, landing pages, conversions, value, journey stages, and operational
-record activity for every enabled CMS module. Periods are 7, 30, 90, 180, and
-365 days.
+campaigns, landing pages, conversions, value, and journey stages. Periods are
+7, 30, 90, 180, and 365 days. `/activity` remains the complete searchable admin
+log with actors, timestamps, resources, events, and changed fields.
 
 The dashboard does not collect browser events itself. Consumer sites discover
 and write `analytics/events`; this admin only reads aggregated reports. Empty

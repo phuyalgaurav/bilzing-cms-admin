@@ -248,7 +248,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(apiErrorMessage(data, response.status, response.headers.get("Retry-After")));
       setSession(data);
       lastRefreshAt.current = Date.now();
-      router.replace("/activity");
+      router.replace("/dashboard");
     },
     [router, setSession],
   );
@@ -265,7 +265,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(apiErrorMessage(data, response.status, response.headers.get("Retry-After")));
       setSession(data);
       lastRefreshAt.current = Date.now();
-      router.replace("/activity");
+      router.replace("/dashboard");
     },
     [router, setSession],
   );

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChartNoAxesCombined, ChevronRight, History, LifeBuoy, LogOut, Menu, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Settings, UserRound, UsersRound } from "lucide-react";
+import { ChartNoAxesCombined, ChevronRight, History, LayoutDashboard, LifeBuoy, LogOut, Menu, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Settings, UserRound, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 interface NavigationLink { href: string; label: string; icon: LucideIcon; }
 interface NavigationGroup { label: string; items: NavigationLink[]; }
 
+const dashboardLink: NavigationLink = { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard };
 const activityLink: NavigationLink = { href: "/activity", label: "Admin log", icon: History };
 const analyticsLink: NavigationLink = { href: "/analytics", label: "Analytics", icon: ChartNoAxesCombined };
 const settingsLink: NavigationLink = { href: "/settings", label: "Settings", icon: Settings };
@@ -38,6 +39,7 @@ const routeLabels: Record<string, string> = {
   settings: "Settings",
   analytics: "Analytics",
   activity: "Admin log",
+  dashboard: "Dashboard",
 };
 
 function pathnameLabel(pathname: string) {
@@ -45,7 +47,7 @@ function pathnameLabel(pathname: string) {
   if (segments[0] === "modules" && segments[1]) {
     return moduleExperience(segments[1]).label;
   }
-  const segment = segments.at(-1) ?? "activity";
+  const segment = segments.at(-1) ?? "dashboard";
   return routeLabels[segment] ?? segment.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
@@ -140,7 +142,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       if (insights) insights.items.unshift(analyticsLink);
       else groups.unshift({ label: "Insights", items: [analyticsLink] });
     }
-    return { groups, navigation: [activityLink, ...groups.flatMap((group) => group.items)] };
+    return { groups, navigation: [dashboardLink, activityLink, ...groups.flatMap((group) => group.items)] };
   }, [config.enabled_modules, config.sidebar_navigation, role]);
 
   if (!ready || !access) return <div className="grid min-h-screen place-items-center"><div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /><span className="sr-only">Loading workspace</span></div>;
@@ -148,7 +150,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const normalizedQuery = navQuery.trim().toLowerCase();
   const current = sidebar.navigation.filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`)).sort((a, b) => b.href.length - a.href.length)[0];
   const grouped = sidebar.groups.map((group) => ({ ...group, items: group.items.filter((item) => !normalizedQuery || item.label.toLowerCase().includes(normalizedQuery)) }));
-  const nav = (isCollapsed: boolean, close?: () => void) => <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation">{!normalizedQuery || activityLink.label.toLowerCase().includes(normalizedQuery) ? <NavItem item={activityLink} active={pathname === activityLink.href} collapsed={isCollapsed} onNavigate={close} /> : null}{grouped.map(({ label, items }) => items.length ? <section key={label} className="mt-4"><h2 className={cn("mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", isCollapsed && "sr-only")}>{label}</h2><div className="space-y-0.5">{items.map((item) => <NavItem key={item.href} item={item} active={pathname === item.href || pathname.startsWith(`${item.href}/`)} collapsed={isCollapsed} onNavigate={close} />)}</div></section> : null)}{normalizedQuery && !activityLink.label.toLowerCase().includes(normalizedQuery) && grouped.every(({ items }) => !items.length) ? <p className="px-3 py-6 text-center text-xs text-muted-foreground">No matching tools</p> : null}</nav>;
+  const primaryLinks = [dashboardLink, activityLink].filter((item) => !normalizedQuery || item.label.toLowerCase().includes(normalizedQuery));
+  const nav = (isCollapsed: boolean, close?: () => void) => <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation"><div className="space-y-0.5">{primaryLinks.map((item) => <NavItem key={item.href} item={item} active={pathname === item.href} collapsed={isCollapsed} onNavigate={close} />)}</div>{grouped.map(({ label, items }) => items.length ? <section key={label} className="mt-4"><h2 className={cn("mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", isCollapsed && "sr-only")}>{label}</h2><div className="space-y-0.5">{items.map((item) => <NavItem key={item.href} item={item} active={pathname === item.href || pathname.startsWith(`${item.href}/`)} collapsed={isCollapsed} onNavigate={close} />)}</div></section> : null)}{normalizedQuery && !primaryLinks.length && grouped.every(({ items }) => !items.length) ? <p className="px-3 py-6 text-center text-xs text-muted-foreground">No matching tools</p> : null}</nav>;
   const brandName = config.admin_theme.brand_name || config.name;
   const sidebarProps = { brandName, workspaceName: config.name, showWorkspaceName: config.admin_theme.show_workspace_name !== false, showSearch: config.admin_theme.show_sidebar_search !== false, logoUrl: config.admin_theme.logo_url, query: navQuery, onQueryChange: setNavQuery, supportUrl: config.admin_theme.support_url, role, onLogout: () => void logout() };
   const sidebarRight = config.admin_theme.sidebar_position === "right";
@@ -159,7 +162,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <aside className={cn("hidden h-screen flex-col border-r lg:sticky lg:top-0 lg:flex", sidebarSoft ? "bg-accent/35" : "bg-card", sidebarRight && "order-2 border-l border-r-0")}><SidebarContent {...sidebarProps} collapsed={collapsed} onCollapse={toggleCollapsed}>{nav(collapsed)}</SidebarContent></aside>
     <Sheet open={mobileOpen} onOpenChange={setMobileOpen}><SheetContent side="left" className={cn("w-[min(88vw,300px)] gap-0 p-0", sidebarSoft ? "bg-accent/35" : "bg-card")} showCloseButton={false}><SheetTitle className="sr-only">Workspace navigation</SheetTitle><SheetDescription className="sr-only">Navigate between admin tools</SheetDescription><SidebarContent {...sidebarProps} collapsed={false} onNavigate={() => setMobileOpen(false)}>{nav(false, () => setMobileOpen(false))}</SidebarContent></SheetContent></Sheet>
     <div className={cn("min-w-0", sidebarRight && "lg:order-1")}>
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background px-4 sm:px-6"><Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu className="size-5" /></Button>{config.admin_theme.show_breadcrumbs !== false ? <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm"><Link href="/activity" className="hidden text-muted-foreground hover:text-foreground sm:inline">Workspace</Link><ChevronRight className="hidden size-3.5 text-muted-foreground sm:inline" /><span className="truncate font-medium">{current?.label ?? pathnameLabel(pathname)}</span></nav> : null}<div className="ml-auto flex items-center gap-1">{error ? <Button variant="outline" size="sm" onClick={() => void refresh()}><RefreshCw className="size-3.5" />Retry</Button> : null}<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Account menu"><UserRound className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-52"><DropdownMenuLabel>{role ? roleLabel[role] : "Member"}</DropdownMenuLabel><DropdownMenuItem asChild><Link href="/profile"><UserRound />Profile</Link></DropdownMenuItem><DropdownMenuItem asChild><Link href="/settings"><Settings />Settings</Link></DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => void logout()}><LogOut />Sign out</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header>
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background px-4 sm:px-6"><Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu className="size-5" /></Button>{config.admin_theme.show_breadcrumbs !== false ? <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm"><Link href="/dashboard" className="hidden text-muted-foreground hover:text-foreground sm:inline">Workspace</Link><ChevronRight className="hidden size-3.5 text-muted-foreground sm:inline" /><span className="truncate font-medium">{current?.label ?? pathnameLabel(pathname)}</span></nav> : null}<div className="ml-auto flex items-center gap-1">{error ? <Button variant="outline" size="sm" onClick={() => void refresh()}><RefreshCw className="size-3.5" />Retry</Button> : null}<DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Account menu"><UserRound className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-52"><DropdownMenuLabel>{role ? roleLabel[role] : "Member"}</DropdownMenuLabel><DropdownMenuItem asChild><Link href="/profile"><UserRound />Profile</Link></DropdownMenuItem><DropdownMenuItem asChild><Link href="/settings"><Settings />Settings</Link></DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={() => void logout()}><LogOut />Sign out</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></header>
       <main className={cn("mx-auto w-full p-4 sm:p-6", config.admin_theme.content_width === "standard" ? "max-w-6xl" : config.admin_theme.content_width === "full" ? "max-w-none" : "max-w-400")}>{children}</main>
     </div>
   </div>;
