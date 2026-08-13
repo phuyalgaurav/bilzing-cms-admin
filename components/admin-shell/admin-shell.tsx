@@ -130,6 +130,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     }
     const settingsItems = [
       ...(role === "super_admin" ? [teamAccessLink] : []),
+      activityLink,
       ...(!seen.has("settings") ? [settingsLink] : []),
     ];
     if (settingsItems.length) {
@@ -142,7 +143,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       if (insights) insights.items.unshift(analyticsLink);
       else groups.unshift({ label: "Insights", items: [analyticsLink] });
     }
-    return { groups, navigation: [dashboardLink, activityLink, ...groups.flatMap((group) => group.items)] };
+    return { groups, navigation: [dashboardLink, ...groups.flatMap((group) => group.items)] };
   }, [config.enabled_modules, config.sidebar_navigation, role]);
 
   if (!ready || !access) return <div className="grid min-h-screen place-items-center"><div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /><span className="sr-only">Loading workspace</span></div>;
@@ -150,7 +151,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const normalizedQuery = navQuery.trim().toLowerCase();
   const current = sidebar.navigation.filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`)).sort((a, b) => b.href.length - a.href.length)[0];
   const grouped = sidebar.groups.map((group) => ({ ...group, items: group.items.filter((item) => !normalizedQuery || item.label.toLowerCase().includes(normalizedQuery)) }));
-  const primaryLinks = [dashboardLink, activityLink].filter((item) => !normalizedQuery || item.label.toLowerCase().includes(normalizedQuery));
+  const primaryLinks = [dashboardLink].filter((item) => !normalizedQuery || item.label.toLowerCase().includes(normalizedQuery));
   const nav = (isCollapsed: boolean, close?: () => void) => <nav className="flex-1 overflow-y-auto p-2" aria-label="Main navigation"><div className="space-y-0.5">{primaryLinks.map((item) => <NavItem key={item.href} item={item} active={pathname === item.href} collapsed={isCollapsed} onNavigate={close} />)}</div>{grouped.map(({ label, items }) => items.length ? <section key={label} className="mt-4"><h2 className={cn("mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", isCollapsed && "sr-only")}>{label}</h2><div className="space-y-0.5">{items.map((item) => <NavItem key={item.href} item={item} active={pathname === item.href || pathname.startsWith(`${item.href}/`)} collapsed={isCollapsed} onNavigate={close} />)}</div></section> : null)}{normalizedQuery && !primaryLinks.length && grouped.every(({ items }) => !items.length) ? <p className="px-3 py-6 text-center text-xs text-muted-foreground">No matching tools</p> : null}</nav>;
   const brandName = config.admin_theme.brand_name || config.name;
   const sidebarProps = { brandName, workspaceName: config.name, showWorkspaceName: config.admin_theme.show_workspace_name !== false, showSearch: config.admin_theme.show_sidebar_search !== false, logoUrl: config.admin_theme.logo_url, query: navQuery, onQueryChange: setNavQuery, supportUrl: config.admin_theme.support_url, role, onLogout: () => void logout() };
