@@ -307,10 +307,10 @@ export const moduleExperiences: Record<string, ModuleExperience> = {
       "job-postings": resource(
         "job posting",
         "job postings",
-        "Publish and close current vacancies.",
+        "Add the role, location, requirements, closing date, and one strong photo.",
         "catalog",
-        ["location", "employment_type", "closes_at", "operational_status"],
-        "Add job posting",
+        ["position_title", "location", "employment_type", "closes_at"],
+        "Post a job",
       ),
     },
   },
