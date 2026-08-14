@@ -158,6 +158,8 @@ const imageFieldPattern = /(^|_)(image|photo|avatar|logo|cover)(_|$)/;
 const listJsonFields = new Set([
   "allergies",
   "benefits",
+  "responsibilities",
+  "requirements",
   "countries",
   "dietary_tags",
   "facilities",
@@ -701,13 +703,39 @@ export default function ModuleResourcePage({
   const resourceName = resourceUX?.plural ?? "module records";
   const primaryFieldOrder = resourceUX?.primaryFields?.join("\u0000") ?? "";
   const { mediaFields, structuredFields, generalFieldGroups } = useMemo(() => {
-    const editorFields = (resource?.fields ?? []).filter(
-      (field) =>
-        !(
-          resource?.line_items &&
-          ["amount", "items", "subtotal", "tax_amount"].includes(field.key)
-        ),
-    );
+    const jobPostingFieldOrder = [
+      "position_title",
+      "summary",
+      "location",
+      "employment_type",
+      "workplace_type",
+      "compensation",
+      "responsibilities",
+      "requirements",
+      "image",
+      "closes_at",
+    ];
+    const isJobPosting =
+      keys?.moduleKey === "team_management" &&
+      keys.resourceKey === "job-postings";
+    const editorFields = (resource?.fields ?? [])
+      .filter(
+        (field) =>
+          !(
+            resource?.line_items &&
+            ["amount", "items", "subtotal", "tax_amount"].includes(field.key)
+          ),
+      )
+      .filter(
+        (field) => !isJobPosting || jobPostingFieldOrder.includes(field.key),
+      )
+      .sort((left, right) => {
+        if (!isJobPosting) return 0;
+        return (
+          jobPostingFieldOrder.indexOf(left.key) -
+          jobPostingFieldOrder.indexOf(right.key)
+        );
+      });
     const nextMediaFields = editorFields.filter(
       (field) => isImageField(field) || field.key === "gallery",
     );
