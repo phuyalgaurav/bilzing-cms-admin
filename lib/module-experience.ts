@@ -286,7 +286,7 @@ export const moduleExperiences: Record<string, ModuleExperience> = {
   },
   team_management: {
     label: "Team",
-    description: "Maintain staff profiles and departments.",
+    description: "Maintain staff profiles, departments, and job openings.",
     primaryResource: "team-members",
     icon: ContactRound,
     resources: {
@@ -303,6 +303,14 @@ export const moduleExperiences: Record<string, ModuleExperience> = {
         "Group staff by responsibility.",
         "settings",
         ["name", "operational_status"],
+      ),
+      "job-postings": resource(
+        "job posting",
+        "job postings",
+        "Publish and close current vacancies.",
+        "catalog",
+        ["location", "employment_type", "closes_at", "operational_status"],
+        "Add job posting",
       ),
     },
   },
