@@ -73,7 +73,7 @@ export function PasswordResetCard({
 
   return (
     <main className="grid min-h-screen place-items-center px-5 py-10">
-      <section className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm sm:p-8">
+      <section className="auth-stage w-full max-w-md rounded-lg border bg-card p-6 shadow-sm sm:p-8">
         <div className="mb-7 grid size-10 place-items-center rounded-md bg-primary text-primary-foreground">
           <LockKeyhole className="size-5" />
         </div>

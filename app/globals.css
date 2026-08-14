@@ -53,6 +53,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
+
 html[data-density="compact"] { font-size: 14px; }
 html[data-density="spacious"] { font-size: 17px; }
 
@@ -75,13 +79,162 @@ button, a, input, textarea, select { outline: none; }
 }
 
 @keyframes cms-list-in {
-  from { opacity: 0; transform: translateY(5px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.dialog-overlay[data-state="open"] { animation: cms-fade-in 160ms ease-out; }
-.dialog-content[data-state="open"] { animation: cms-fade-in 180ms ease-out; }
-.motion-list > * { animation: cms-list-in 160ms ease-out both; }
+@keyframes cms-page-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.995); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes cms-popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes cms-popover-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-2px) scale(0.985); }
+}
+
+@keyframes cms-dialog-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.975); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes cms-dialog-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -49%) scale(0.985); }
+}
+
+@keyframes cms-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes cms-sheet-right-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes cms-sheet-left-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes cms-sheet-right-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes cms-sheet-left-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+.admin-shell-grid {
+  transition: grid-template-columns 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.admin-sidebar {
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.admin-nav-link {
+  position: relative;
+  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.admin-nav-link:hover { transform: translateX(2px); }
+.admin-nav-link:active { transform: translateX(1px) scale(0.985); }
+.admin-nav-link[aria-current="page"]::before {
+  position: absolute;
+  inset-block: 7px;
+  left: -8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--brand);
+  content: "";
+  animation: cms-fade-in 180ms ease-out both;
+}
+
+.route-stage { animation: cms-page-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.route-stage > * { animation: cms-list-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.route-stage > :nth-child(2) { animation-delay: 35ms; }
+.route-stage > :nth-child(3) { animation-delay: 70ms; }
+.route-stage > :nth-child(n + 4) { animation-delay: 95ms; }
+
+.auth-stage { animation: cms-page-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.auth-stage form > * { animation: cms-list-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.auth-stage form > :nth-child(2) { animation-delay: 45ms; }
+.auth-stage form > :nth-child(n + 3) { animation-delay: 80ms; }
+
+.motion-list > * { animation: cms-list-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.motion-list > :nth-child(2) { animation-delay: 25ms; }
+.motion-list > :nth-child(3) { animation-delay: 50ms; }
+.motion-list > :nth-child(n + 4) { animation-delay: 70ms; }
+
+.dialog-overlay[data-state="open"],
+[data-slot="alert-dialog-overlay"][data-state="open"],
+[data-slot="sheet-overlay"][data-state="open"] {
+  animation: cms-fade-in 180ms ease-out both;
+}
+
+.dialog-overlay[data-state="closed"],
+[data-slot="alert-dialog-overlay"][data-state="closed"],
+[data-slot="sheet-overlay"][data-state="closed"] {
+  animation: cms-overlay-out 140ms ease-in both;
+}
+
+.dialog-content[data-state="open"],
+[data-slot="alert-dialog-content"][data-state="open"] {
+  animation: cms-dialog-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dialog-content[data-state="closed"],
+[data-slot="alert-dialog-content"][data-state="closed"] {
+  animation: cms-dialog-out 140ms ease-in both;
+}
+
+[data-slot="sheet-content"][data-state="open"][data-side="right"] {
+  animation: cms-sheet-right-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-slot="sheet-content"][data-state="open"][data-side="left"] {
+  animation: cms-sheet-left-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-slot="sheet-content"][data-state="closed"][data-side="right"] {
+  animation: cms-sheet-right-out 160ms ease-in both;
+}
+
+[data-slot="sheet-content"][data-state="closed"][data-side="left"] {
+  animation: cms-sheet-left-out 160ms ease-in both;
+}
+
+[data-slot="dropdown-menu-content"][data-state="open"],
+[data-slot="select-content"][data-state="open"],
+[data-slot="tooltip-content"][data-state="delayed-open"],
+[data-slot="tooltip-content"][data-state="instant-open"] {
+  animation: cms-popover-in 170ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-slot="dropdown-menu-content"][data-state="closed"],
+[data-slot="select-content"][data-state="closed"] {
+  animation: cms-popover-out 110ms ease-in both;
+}
+
+[data-slot="card"] {
+  transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.interactive-control {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.interactive-control:hover:not(:disabled) { transform: translateY(-1px); }
+.interactive-control:active:not(:disabled) { transform: translateY(0) scale(0.98); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -90,4 +243,9 @@ button, a, input, textarea, select { outline: none; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  .admin-nav-link:hover,
+  .admin-nav-link:active,
+  .interactive-control:hover:not(:disabled),
+  .interactive-control:active:not(:disabled) { transform: none !important; }
 }

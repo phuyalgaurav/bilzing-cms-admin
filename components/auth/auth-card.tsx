@@ -68,7 +68,7 @@ export function AuthCard({
           : undefined
       }
     >
-      <section className="w-full max-w-md rounded-lg border bg-card p-6 shadow-sm sm:p-8">
+      <section className="auth-stage w-full max-w-md rounded-lg border bg-card p-6 shadow-sm sm:p-8">
         <div className="mb-8 flex items-center gap-3">
           <div className="relative grid size-10 place-items-center overflow-hidden rounded-md bg-primary text-primary-foreground">
             {config.admin_theme.logo_url ? (
