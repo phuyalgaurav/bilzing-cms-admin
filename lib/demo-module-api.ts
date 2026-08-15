@@ -59,7 +59,15 @@ function demoRolePolicyPayload(data: DemoStore) {
 }
 
 const workflowFor = (moduleKey: string) => {
-  if (["orders", "delivery", "booking", "membership", "crm"].includes(moduleKey))
+  if (moduleKey === "orders")
+    return [
+      ["draft", "Draft"],
+      ["confirmed", "Confirmed"],
+      ["paid", "Paid"],
+      ["fulfilled", "Fulfilled"],
+      ["cancelled", "Cancelled"],
+    ] as const;
+  if (["delivery", "booking", "membership", "crm"].includes(moduleKey))
     return [
       ["new", "New"],
       ["in_progress", "In progress"],
@@ -269,6 +277,27 @@ function seededRecord(
     ...Object.fromEntries(
       resource.fields.map((field) => [field.key, defaultValue(field.key, position)]),
     ),
+    ...(moduleKey === "orders"
+      ? {
+          customer: position === 1 ? "Maya — 9800000001" : "Rohan — 9800000002",
+          order_number: `ORD-DEMO-${position}`,
+          amount: position === 1 ? 420 : 680,
+          shipping_address:
+            position === 1
+              ? "Pickup branch: Birtamod\nReady after 4 PM"
+              : "Delivery address: Charpane, Jhapa\nFulfil from branch: Birtamod",
+          items:
+            position === 1
+              ? [
+                  { id: 1, name: "Chocolate Doughnut", price: 120, quantity: 2 },
+                  { id: 2, name: "Coffee", price: 180, quantity: 1 },
+                ]
+              : [
+                  { id: 3, name: "Black Forest Pastry", price: 180, quantity: 2 },
+                  { id: 4, name: "Belgian Waffle", price: 320, quantity: 1 },
+                ],
+        }
+      : {}),
     ...(media
       ? {
           file: imageUrl,

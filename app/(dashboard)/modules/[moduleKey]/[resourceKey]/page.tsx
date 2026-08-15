@@ -75,6 +75,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { ConfirmDialog } from "@/components/admin/confirm-dialog";
+import {
+  normalizeOrderRecord,
+  OrderSummary,
+  OrderWorkspace,
+} from "@/components/admin/order-workspace";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Sheet,
@@ -345,19 +350,22 @@ export default function ModuleResourcePage({
       if (showRefresh) setRefreshing(true);
       setError(undefined);
       try {
+        const isOrderResource =
+          keys?.moduleKey === "orders" && keys.resourceKey === "orders";
         const response = await getAdminModuleRecords(
           currentResource.admin_endpoint,
           {
             search: query.trim(),
             status: statusFilter,
-            operational_status: operationalFilter,
+            operational_status: isOrderResource ? "" : operationalFilter,
             ordering,
             page,
-            pageSize: PAGE_SIZE,
+            pageSize: isOrderResource ? 50 : PAGE_SIZE,
           },
         );
         if (requestId !== recordRequest.current) return;
-        setItems(Array.isArray(response) ? response : response.results);
+        const records = Array.isArray(response) ? response : response.results;
+        setItems(isOrderResource ? records.map(normalizeOrderRecord) : records);
         setTotalCount(Array.isArray(response) ? response.length : response.count);
       } catch (cause) {
         if (requestId !== recordRequest.current) return;
@@ -380,6 +388,7 @@ export default function ModuleResourcePage({
       query,
       resource,
       statusFilter,
+      keys,
     ],
   );
 
@@ -452,8 +461,14 @@ export default function ModuleResourcePage({
     };
   }, [enabledAdminEndpoints, relationReload, resource]);
 
-  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const visibleItems = items;
+  const isOrderResource =
+    keys?.moduleKey === "orders" && keys.resourceKey === "orders";
+  const currentPageSize = isOrderResource ? 50 : PAGE_SIZE;
+  const pageCount = Math.max(1, Math.ceil(totalCount / currentPageSize));
+  const visibleItems =
+    isOrderResource && operationalFilter
+      ? items.filter((item) => item.operational_status === operationalFilter)
+      : items;
 
   function beginRelatedCreate(field: ResourceField) {
     const contract = field.relation_endpoint
@@ -867,11 +882,15 @@ export default function ModuleResourcePage({
           )}
       </section>
 
-      <ResourceSummary
-        items={items}
-        view={resourceUX?.view ?? "content"}
-        publicRead={resource?.public_read}
-      />
+      {isOrderResource ? (
+        <OrderSummary items={items} totalCount={totalCount} />
+      ) : (
+        <ResourceSummary
+          items={items}
+          view={resourceUX?.view ?? "content"}
+          publicRead={resource?.public_read}
+        />
+      )}
 
       {error && (
         <Card className="mb-4 border-destructive/30 bg-destructive/[0.03]">
@@ -1295,23 +1314,35 @@ export default function ModuleResourcePage({
               records…
             </div>
           ) : visibleItems.length ? (
-            <ResourceRecordCollection
-              view={resourceUX?.view ?? "content"}
-              moduleKey={keys?.moduleKey}
-              resourceKey={keys?.resourceKey}
-              items={visibleItems}
-              primaryFieldOrder={primaryFieldOrder}
-              resource={resource}
-              relations={relations}
-              mayEdit={mayEdit}
-              mayDelete={mayDelete}
-              mayWorkflow={mayWorkflow}
-              mayPublish={mayPublish}
-              busyRecord={busyRecord}
-              onEdit={edit}
-              onDelete={setDeleteTarget}
-              onAction={applyAction}
-            />
+            isOrderResource ? (
+              <OrderWorkspace
+                items={visibleItems}
+                resource={resource}
+                mayEdit={mayEdit}
+                mayWorkflow={mayWorkflow}
+                busyRecord={busyRecord}
+                onEdit={edit}
+                onAction={applyAction}
+              />
+            ) : (
+              <ResourceRecordCollection
+                view={resourceUX?.view ?? "content"}
+                moduleKey={keys?.moduleKey}
+                resourceKey={keys?.resourceKey}
+                items={visibleItems}
+                primaryFieldOrder={primaryFieldOrder}
+                resource={resource}
+                relations={relations}
+                mayEdit={mayEdit}
+                mayDelete={mayDelete}
+                mayWorkflow={mayWorkflow}
+                mayPublish={mayPublish}
+                busyRecord={busyRecord}
+                onEdit={edit}
+                onDelete={setDeleteTarget}
+                onAction={applyAction}
+              />
+            )
           ) : (
             <EmptyState
               icon={
