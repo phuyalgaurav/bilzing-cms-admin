@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChartNoAxesCombined, ChevronRight, History, LayoutDashboard, LifeBuoy, LogOut, Menu, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Settings, UserRound, UsersRound } from "lucide-react";
+import { ChartNoAxesCombined, ChevronRight, FileText, Globe2, History, Images, LayoutDashboard, LifeBuoy, ListTree, LogOut, Menu, Newspaper, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Settings, UserRound, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -25,7 +25,12 @@ const activityLink: NavigationLink = { href: "/activity", label: "Admin log", ic
 const analyticsLink: NavigationLink = { href: "/analytics", label: "Analytics", icon: ChartNoAxesCombined };
 const settingsLink: NavigationLink = { href: "/settings", label: "Settings", icon: Settings };
 const teamAccessLink: NavigationLink = { href: "/team-access", label: "Team access", icon: UsersRound };
-const settingsOnlyModules = new Set(["website_pages", "media_library", "user_management", "blog", "settings", "seo_management", "gallery", "faq", "document_management", "notifications", "analytics"]);
+const websiteLink: NavigationLink = { href: "/website", label: "Visitor pages", icon: Globe2 };
+const pagesLink: NavigationLink = { href: "/pages", label: "Pages", icon: FileText };
+const navigationLink: NavigationLink = { href: "/navigation", label: "Menus", icon: ListTree };
+const mediaLink: NavigationLink = { href: "/media", label: "Media library", icon: Images };
+const postsLink: NavigationLink = { href: "/posts", label: "Blog posts", icon: Newspaper };
+const settingsOnlyModules = new Set(["website_pages", "media_library", "user_management", "blog", "settings", "analytics"]);
 
 const routeLabels: Record<string, string> = {
   pages: "Pages",
@@ -40,6 +45,7 @@ const routeLabels: Record<string, string> = {
   analytics: "Analytics",
   activity: "Admin log",
   dashboard: "Dashboard",
+  website: "Visitor pages",
 };
 
 function pathnameLabel(pathname: string) {
@@ -143,6 +149,16 @@ export function AdminShell({ children }: { children: ReactNode }) {
       if (insights) insights.items.unshift(analyticsLink);
       else groups.unshift({ label: "Insights", items: [analyticsLink] });
     }
+    groups.unshift({
+      label: "Website",
+      items: [
+        websiteLink,
+        pagesLink,
+        navigationLink,
+        mediaLink,
+        ...(config.enabled_modules.includes("blog") ? [postsLink] : []),
+      ],
+    });
     return { groups, navigation: [dashboardLink, ...groups.flatMap((group) => group.items)] };
   }, [config.enabled_modules, config.sidebar_navigation, role]);
 

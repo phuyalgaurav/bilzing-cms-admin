@@ -1,9 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { apiUrl, tenantKey, demoMode } from "../_shared";
+import { apiUrl, demoMode, tenantKeyForRequest } from "../_shared";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const tenantKey = tenantKeyForRequest(request);
     const refresh = (await cookies()).get("cms_refresh")?.value;
     if (demoMode && refresh === "demo-refresh-token")
       return NextResponse.json({

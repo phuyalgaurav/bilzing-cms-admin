@@ -5,10 +5,18 @@ const apiUrl = (process.env.CMS_API_INTERNAL_URL ?? publicApiUrl).replace(
   /\/$/,
   "",
 );
-const tenantKey = process.env.NEXT_PUBLIC_TENANT_KEY ?? "";
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true" || !publicApiUrl;
 
-export async function forwardAuth(path: string, body: unknown) {
+export function tenantKeyForRequest(request: Request) {
+  const host = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "")
+    .toLowerCase().split(":", 1)[0].replace(/\.$/, "");
+  const labels = host.split(".");
+  const adminIndex = labels.indexOf("admin");
+  return adminIndex > 0 ? labels.slice(0, adminIndex).join(".") : "";
+}
+
+export async function forwardAuth(request: Request, path: string, body: unknown) {
+  const tenantKey = tenantKeyForRequest(request);
   if (demoMode) {
     const credentials = body as {
       email?: string;
@@ -100,4 +108,4 @@ export async function forwardAuth(path: string, body: unknown) {
   }
 }
 
-export { apiUrl, tenantKey, demoMode };
+export { apiUrl, demoMode };

@@ -6,7 +6,14 @@ import type {
 } from "./types";
 import { moduleExperiences } from "./module-experience";
 
-export const TENANT_KEY = process.env.NEXT_PUBLIC_TENANT_KEY ?? "";
+/** Resolve `<tenant>.admin.<base-domain>` at request time. */
+export function runtimeTenantKey(hostname?: string) {
+  const host = hostname ?? (typeof window !== "undefined" ? window.location.hostname : "");
+  const labels = host.toLowerCase().replace(/\.$/, "").split(".");
+  const adminIndex = labels.indexOf("admin");
+  return adminIndex > 0 ? labels.slice(0, adminIndex).join(".") : "";
+}
+
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(
   /\/$/,
   "",
@@ -14,12 +21,6 @@ export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(
 export const DEMO_MODE =
   process.env.NEXT_PUBLIC_DEMO_MODE === "true" || !API_URL;
 
-const defaultModules = [
-  "website_pages",
-  "media_library",
-  "user_management",
-  "settings",
-];
 const demoModules = Object.keys(moduleExperiences);
 
 export const defaultSidebarNavigation: SidebarCategory[] = [
@@ -33,19 +34,6 @@ export const defaultDashboardWidgets: DashboardWidget[] = [
   "tools",
   "recent",
 ];
-
-function parseEnabledModules(fallback = defaultModules) {
-  try {
-    const parsed = JSON.parse(process.env.NEXT_PUBLIC_ENABLED_MODULES ?? "[]");
-    return Array.isArray(parsed) &&
-      parsed.every((value) => typeof value === "string") &&
-      parsed.length > 0
-      ? parsed
-      : fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 export const neutralTheme: Required<TenantTheme> = {
   brand_name: "Content Studio",
@@ -98,16 +86,8 @@ function isFontFamily(value: unknown): value is string {
   return typeof value === "string" && /^[\w\s,-]{1,100}$/.test(value);
 }
 
-function parseFallback(): TenantTheme {
-  try {
-    return JSON.parse(process.env.NEXT_PUBLIC_ADMIN_THEME ?? "{}");
-  } catch {
-    return {};
-  }
-}
-
 export function normalizeTheme(theme?: TenantTheme): TenantTheme {
-  const input = { ...parseFallback(), ...theme };
+  const input = { ...theme };
   const normalized: TenantTheme = { ...neutralTheme, ...input };
   for (const key of [
     "primary_color",
@@ -217,13 +197,13 @@ export function applyFavicon(source: string, theme: TenantTheme = {}) {
 }
 
 export async function fetchTenantConfig(): Promise<TenantConfig> {
-  if (DEMO_MODE || !API_URL || !TENANT_KEY)
+  const tenantKey = runtimeTenantKey();
+  if (DEMO_MODE)
     return {
-      tenant_key: TENANT_KEY || "demo",
+      tenant_key: "demo",
       name: "Bilzing Nepal",
-      module_preset:
-        process.env.NEXT_PUBLIC_MODULE_PRESET ?? "general_business",
-      enabled_modules: DEMO_MODE ? demoModules : parseEnabledModules(demoModules),
+      module_preset: "general_business",
+      enabled_modules: demoModules,
       sidebar_navigation: defaultSidebarNavigation,
       dashboard_widgets: defaultDashboardWidgets,
       admin_theme: normalizeTheme({
@@ -232,14 +212,17 @@ export async function fetchTenantConfig(): Promise<TenantConfig> {
         accent_color: "#d4ff00",
       }),
     };
+  if (!API_URL) throw new Error("The shared CMS API URL is not configured.");
+  if (!tenantKey)
+    throw new Error("Open this admin on a tenant hostname such as acme.admin.example.com.");
   const response = await fetch(`${API_URL}/api/v1/tenant-config/`, {
-    headers: { "X-Tenant-Key": TENANT_KEY },
+    headers: { "X-Tenant-Key": tenantKey },
     cache: "no-store",
   });
   if (!response.ok)
     throw new Error("We couldn’t load this workspace’s settings.");
   const config = (await response.json()) as TenantConfig;
-  if (config.tenant_key !== TENANT_KEY)
+  if (config.tenant_key !== tenantKey)
     throw new Error("Tenant configuration mismatch.");
   return {
     ...config,

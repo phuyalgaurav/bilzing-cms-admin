@@ -1,5 +1,5 @@
 import { apiFetch } from "./api-client";
-import { API_URL, TENANT_KEY } from "./tenant-config";
+import { API_URL, runtimeTenantKey } from "./tenant-config";
 import type {
   ModuleContract,
   ModuleRecord,
@@ -217,7 +217,7 @@ export async function publicSiteFetch<T>(
   if (!API_URL)
     throw new Error("NEXT_PUBLIC_API_URL is required for public API requests.");
   const headers = new Headers(init.headers);
-  headers.set("X-Tenant-Key", TENANT_KEY);
+  headers.set("X-Tenant-Key", runtimeTenantKey());
   if (!(init.body instanceof FormData))
     headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });

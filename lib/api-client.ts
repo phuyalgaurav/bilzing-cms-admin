@@ -1,5 +1,5 @@
 import { demoModuleFetch } from "./demo-module-api";
-import { API_URL, DEMO_MODE, TENANT_KEY } from "./tenant-config";
+import { API_URL, DEMO_MODE, runtimeTenantKey } from "./tenant-config";
 import type { Role } from "./types";
 
 export const SESSION_REFRESHED_EVENT = "cms:session-refreshed";
@@ -128,7 +128,7 @@ export async function apiFetch<T>(
   if (!API_URL)
     throw new ApiError("Add NEXT_PUBLIC_API_URL to connect the CMS backend.", 0);
   const headers = new Headers(init.headers);
-  headers.set("X-Tenant-Key", TENANT_KEY);
+  headers.set("X-Tenant-Key", runtimeTenantKey());
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
@@ -154,7 +154,7 @@ export async function publicSiteFetch<T>(
   if (!API_URL)
     throw new Error("NEXT_PUBLIC_API_URL is required for public API requests.");
   const headers = new Headers(init.headers);
-  headers.set("X-Tenant-Key", TENANT_KEY);
+  headers.set("X-Tenant-Key", runtimeTenantKey());
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (!response.ok) throw await parseError(response);

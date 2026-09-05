@@ -1,4 +1,5 @@
 import { moduleExperiences, titleCase } from "./module-experience";
+import { HERO_STARTER_SOURCE } from "./hero-sandbox";
 import type {
   ModuleContract,
   ModuleRecord,
@@ -18,7 +19,34 @@ type DemoStore = {
   activities?: RecordActivity[];
   members: TenantMember[];
   rolePolicies?: DemoRolePolicy[];
+  siteBuilder?: DemoSiteBuilder;
 };
+
+type DemoSiteBuilder = {
+  site_layout: Record<string, unknown>;
+  site_seo: Record<string, unknown>;
+  site_footer: Record<string, unknown>;
+  site_hero: Record<string, unknown>;
+  site_theme: Record<string, unknown>;
+  site_access: string;
+  has_site_password: boolean;
+  manifest_version: number;
+  domains: Array<{ id: number; hostname: string; kind: string; is_primary: boolean; is_verified: boolean }>;
+};
+
+function initialSiteBuilder(): DemoSiteBuilder {
+  return {
+    site_layout: { pages: { "/": { sections: [{ id: "hero", type: "custom_hero" }] } } },
+    site_seo: { title: "Bilzing demo", description: "Editable shared-runtime demo", robots: "noindex,nofollow" },
+    site_footer: { text: "Bilzing local demo" },
+    site_hero: { mode: "custom", source: HERO_STARTER_SOURCE, height: 520, sdk_version: "1" },
+    site_theme: { primary_color: "#111827", background_color: "#f4efe6", surface_color: "#ffffff", text_color: "#17212b", border_radius: "0.5rem", content_width: "1120px" },
+    site_access: "public",
+    has_site_password: false,
+    manifest_version: 1,
+    domains: [{ id: 1, hostname: "acme.localhost", kind: "demo", is_primary: true, is_verified: true }],
+  };
+}
 
 type DemoRolePolicy = {
   key: Exclude<Role, "super_admin">;
@@ -596,6 +624,41 @@ export async function demoModuleFetch<T>(path: string, init: RequestInit): Promi
   if (parsed.pathname === "/api/v1/admin/modules/")
     return { handled: true, value: demoModuleDirectory as T };
   const data = store();
+  if (parsed.pathname === "/api/v1/admin/site-builder/") {
+    data.siteBuilder ??= initialSiteBuilder();
+    const method = init.method ?? "GET";
+    if (method === "PATCH") {
+      const payload = await body(init);
+      for (const key of ["site_layout", "site_seo", "site_footer", "site_hero", "site_theme", "site_access"] as const) {
+        if (key in payload) Object.assign(data.siteBuilder, { [key]: payload[key] });
+      }
+      if (typeof payload.site_password === "string" && payload.site_password) data.siteBuilder.has_site_password = true;
+      save(data);
+    }
+    if (method === "POST") {
+      const payload = await body(init);
+      if (payload.action === "publish") data.siteBuilder.manifest_version += 1;
+      save(data);
+      return { handled: true, value: { ...data.siteBuilder, ...(payload.action === "preview" ? { preview_url: "http://acme.localhost:3000" } : {}) } as T };
+    }
+    return { handled: true, value: data.siteBuilder as T };
+  }
+  if (parsed.pathname === "/api/v1/admin/site-domains/") {
+    data.siteBuilder ??= initialSiteBuilder();
+    if ((init.method ?? "GET") === "POST") {
+      const payload = await body(init);
+      data.siteBuilder.domains.push({ id: Date.now(), hostname: String(payload.hostname ?? ""), kind: "custom", is_primary: false, is_verified: false });
+      save(data);
+    }
+    return { handled: true, value: data.siteBuilder.domains as T };
+  }
+  const domainMatch = parsed.pathname.match(/^\/api\/v1\/admin\/site-domains\/(\d+)\/$/);
+  if (domainMatch && (init.method ?? "GET") === "DELETE") {
+    data.siteBuilder ??= initialSiteBuilder();
+    data.siteBuilder.domains = data.siteBuilder.domains.filter((item) => item.id !== Number(domainMatch[1]));
+    save(data);
+    return { handled: true, value: undefined as T };
+  }
   if (parsed.pathname === "/api/v1/admin/role-policies/") {
     if ((init.method ?? "GET") === "PUT") {
       const payload = await body(init);

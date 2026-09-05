@@ -1,8 +1,8 @@
 # Bilzing CMS Admin
 
-The canonical Next.js tenant admin for Bilzing CMS. One codebase is configured
-and deployed independently for every tenant; tenant names, modules, branding,
-and API URLs are not hardcoded.
+The shared Next.js tenant admin for Bilzing CMS. One runtime serves every
+tenant. Tenant identity comes from `<tenant>.admin.<base-domain>` and live
+branding, modules, and navigation come from Django.
 
 ## Run connected to Django
 
@@ -13,11 +13,14 @@ npm run dev
 ```
 
 ```dotenv
-NEXT_PUBLIC_TENANT_KEY=acme
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 CMS_API_INTERNAL_URL=http://127.0.0.1:8000
 NEXT_PUBLIC_DEMO_MODE=false
 ```
+
+Open the local app through a tenant-shaped hostname, for example
+`http://acme-local.admin.localhost:3002`. Plain `localhost` is intentionally
+rejected in connected mode because it does not identify a tenant.
 
 When Next.js runs inside the backend Docker network, use
 `CMS_API_INTERNAL_URL=http://web:8000` while keeping `NEXT_PUBLIC_API_URL` set to
@@ -40,12 +43,8 @@ only and does not write Django data.
 
 | Variable | Purpose |
 | --- | --- |
-| `NEXT_PUBLIC_TENANT_KEY` | Immutable tenant identifier. |
 | `NEXT_PUBLIC_API_URL` | Browser-facing shared Django API. |
 | `CMS_API_INTERNAL_URL` | Optional server-only API URL for auth handlers. |
-| `NEXT_PUBLIC_ADMIN_THEME` | JSON fallback theme. |
-| `NEXT_PUBLIC_ENABLED_MODULES` | JSON module fallback. |
-| `NEXT_PUBLIC_MODULE_PRESET` | Preset fallback. |
 | `NEXT_PUBLIC_DEMO_MODE` | `true` enables standalone demo mode. |
 
 ## Product structure
@@ -53,7 +52,9 @@ only and does not write Django data.
 - Dashboard sections controlled centrally from the tenant’s Django Admin record.
 - Runtime sidebar category/item ordering from `/api/v1/tenant-config/`; changing it does not require redeployment.
 - Daily enabled modules in primary navigation.
-- Website/configuration tools under Settings.
+- A dedicated Website workspace with backend-discovered visitor pages, page
+  visibility, copy, introductory content, collection/form placement, and main
+  navigation controls.
 - Dedicated pages, posts, navigation, media, members, and profile screens.
 - Contract-driven concrete resource editors for every optional module.
 - Search, filters, workflow/lifecycle actions, related creation, media pickers,
@@ -62,6 +63,12 @@ only and does not write Django data.
 The authenticated backend response from `/api/v1/admin/modules/` controls
 canonical endpoints, fields, workflows, and `allowed_actions`. The backend is
 authoritative for RBAC.
+
+`/website` also reads `site_features` from Django. It never invents consumer
+routes: each card represents a backend-approved public capability, and changes
+are saved into the tenant draft layout before preview or publication. Nested
+routes such as `/services/categories` are controlled here without requiring a
+flat CMS `Page` slug.
 
 ## Dashboard and analytics
 
@@ -90,16 +97,11 @@ dashboard view together.
 
 ## Runtime branding
 
-`NEXT_PUBLIC_ADMIN_THEME` is a deployment fallback only. The live
-`/api/v1/tenant-config/` response is authoritative after startup, and the app
-refreshes it on focus, visibility changes, and a short interval. Logo, colors,
-fonts, density, layout, and favicon updates therefore do not require a new
-deployment. Favicon URLs include a theme revision query so browsers do not keep
-showing a previously cached tenant icon.
-
-Existing generated tenant admins must still be redeployed when this template's
-code changes. A source push updates the template repository; it does not rebuild
-every existing Vercel tenant project.
+The live `/api/v1/tenant-config/` response is authoritative after startup, and
+the app refreshes it on focus, visibility changes, and a short interval. Logo,
+colors, fonts, density, layout, and favicon updates therefore do not require a
+new deployment. Favicon URLs include a theme revision query so browsers do not
+keep showing a previously cached tenant icon.
 
 ## Checks
 
