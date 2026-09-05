@@ -24,6 +24,7 @@ const importLibrary = (name) => {
 window.bilzing = Object.freeze({
   version: "1",
   site: Object.freeze({ get: () => call("bilzing.site.get") }),
+  cta: Object.freeze({ get: () => call("bilzing.cta.get"), activate: () => call("bilzing.cta.activate") }),
   navigation: Object.freeze({ go: (href) => call("bilzing.navigation.go", { href }) }),
   analytics: Object.freeze({ track: (name, metadata = {}) => call("bilzing.analytics.track", { name, metadata }) }),
   frame: Object.freeze({ resize: (height) => call("bilzing.frame.resize", { height }) }),
@@ -43,11 +44,11 @@ export const HERO_STARTER_SOURCE = String.raw`const Hero = () => {
 };
 render(<Hero />);`;
 
-export const HERO_RUNTIME_GUIDE = `React is available as React. Render with render(<Hero />). Use hooks normally. Load approved packages asynchronously with bilzing.libraries.import("lucide-react") or bilzing.libraries.import("motion").`;
+export const HERO_RUNTIME_GUIDE = `React is available as React. Render with render(<Hero />). Use hooks normally. bilzing.cta.get() reads the CTA configured in Website settings and bilzing.cta.activate() follows it. Load approved packages asynchronously with bilzing.libraries.import("lucide-react") or bilzing.libraries.import("motion").`;
 
 export function buildHeroDocument(source: string) {
   const encodedSource = JSON.stringify(source).replaceAll("<", "\\u003c");
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh; style-src 'unsafe-inline'; img-src data: blob: https:; font-src data: https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><script src="https://unpkg.com/@babel/standalone@7.26.0/babel.min.js"></script></head><body><div id="root"></div><script type="module">
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://esm.sh; style-src 'unsafe-inline'; img-src data: blob: https:; font-src data: https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body,#root{width:100%;min-height:100%;margin:0}body{overflow-x:hidden}</style><script src="https://unpkg.com/@babel/standalone@7.26.0/babel.min.js"></script></head><body><div id="root"></div><script type="module">
 import React from "https://esm.sh/react@19.2.0";
 import { createRoot } from "https://esm.sh/react-dom@19.2.0/client";
 ${sdk}

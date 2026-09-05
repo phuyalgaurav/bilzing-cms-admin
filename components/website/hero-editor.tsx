@@ -12,13 +12,15 @@ export function HeroEditor({ hero, layout, onChange }: Props) {
   useEffect(() => {
     function bridge(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow || !event.data?.id) return;
-      if (event.data.method === "bilzing.site.get") frame.current.contentWindow?.postMessage({id:event.data.id,result:{site:{name:"Draft preview"}}},"*");
+      if (event.data.method === "bilzing.site.get") frame.current.contentWindow?.postMessage({id:event.data.id,result:{site:{name:"Draft preview"},hero:{cta_label:typeof hero.cta_label === "string" ? hero.cta_label : "",cta_href:typeof hero.cta_href === "string" ? hero.cta_href : ""}}},"*");
+      if (event.data.method === "bilzing.cta.get") frame.current.contentWindow?.postMessage({id:event.data.id,result:{label:typeof hero.cta_label === "string" ? hero.cta_label : "",href:typeof hero.cta_href === "string" ? hero.cta_href : ""}},"*");
+      if (event.data.method === "bilzing.cta.activate") frame.current.contentWindow?.postMessage({id:event.data.id,result:{preview:true,href:hero.cta_href}},"*");
       if (event.data.method === "bilzing.navigation.go") frame.current.contentWindow?.postMessage({id:event.data.id,result:{preview:true,href:event.data.params?.href}},"*");
       if (event.data.method === "bilzing.analytics.track") frame.current.contentWindow?.postMessage({id:event.data.id,result:{tracked:true,preview:true}},"*");
       if (event.data.method === "bilzing.frame.resize") frame.current.contentWindow?.postMessage({id:event.data.id,result:{height:event.data.params?.height,preview:true}},"*");
     }
     window.addEventListener("message", bridge); return () => window.removeEventListener("message", bridge);
-  }, []);
+  }, [hero]);
   function update(nextSource:string, nextHeight=height) {
     const nextHero = {...hero,mode:"custom",source:nextSource,height:nextHeight,sdk_version:"1"};
     const pages = layout.pages && typeof layout.pages === "object" ? layout.pages as Json : {};
