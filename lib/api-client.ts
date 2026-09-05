@@ -8,6 +8,7 @@ export const SESSION_EXPIRED_EVENT = "cms:session-expired";
 export interface RefreshedSession {
   access: string;
   role?: Role;
+  is_developer?: boolean;
 }
 
 export class ApiError extends Error {

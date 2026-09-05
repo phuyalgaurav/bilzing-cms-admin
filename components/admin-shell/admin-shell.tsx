@@ -25,7 +25,7 @@ const activityLink: NavigationLink = { href: "/activity", label: "Admin log", ic
 const analyticsLink: NavigationLink = { href: "/analytics", label: "Analytics", icon: ChartNoAxesCombined };
 const settingsLink: NavigationLink = { href: "/settings", label: "Settings", icon: Settings };
 const teamAccessLink: NavigationLink = { href: "/team-access", label: "Team access", icon: UsersRound };
-const websiteLink: NavigationLink = { href: "/website", label: "Visitor pages", icon: Globe2 };
+const websiteLink: NavigationLink = { href: "/website", label: "React renderer", icon: Globe2 };
 const pagesLink: NavigationLink = { href: "/pages", label: "Pages", icon: FileText };
 const navigationLink: NavigationLink = { href: "/navigation", label: "Menus", icon: ListTree };
 const mediaLink: NavigationLink = { href: "/media", label: "Media library", icon: Images };
@@ -45,7 +45,7 @@ const routeLabels: Record<string, string> = {
   analytics: "Analytics",
   activity: "Admin log",
   dashboard: "Dashboard",
-  website: "Visitor pages",
+  website: "React renderer",
 };
 
 function pathnameLabel(pathname: string) {
@@ -82,7 +82,7 @@ function SidebarContent({ children, collapsed, brandName, workspaceName, showWor
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { ready, access, role, logout } = useAuth();
+  const { ready, access, role, isDeveloper, logout } = useAuth();
   const { config, error, refresh } = useTenant();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -152,15 +152,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
     groups.unshift({
       label: "Website",
       items: [
-        websiteLink,
         pagesLink,
         navigationLink,
         mediaLink,
         ...(config.enabled_modules.includes("blog") ? [postsLink] : []),
       ],
     });
+    if (isDeveloper) groups.push({ label: "Developers", items: [websiteLink] });
     return { groups, navigation: [dashboardLink, ...groups.flatMap((group) => group.items)] };
-  }, [config.enabled_modules, config.sidebar_navigation, role]);
+  }, [config.enabled_modules, config.sidebar_navigation, role, isDeveloper]);
 
   if (!ready || !access) return <div className="grid min-h-screen place-items-center"><div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /><span className="sr-only">Loading workspace</span></div>;
 

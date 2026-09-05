@@ -1,35 +1,71 @@
 "use client";
-import { useEffect, useRef } from "react";
-import { buildHeroDocument, HERO_RUNTIME_GUIDE, HERO_STARTER_SOURCE } from "@/lib/hero-sandbox";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { buildHeroDocument, HERO_RUNTIME_GUIDE } from "@/lib/hero-sandbox";
 
 type Json = Record<string, unknown>;
-type Props = { hero: Json; layout: Json; onChange: (hero: Json, layout: Json) => void };
+type Props = { hero: Json; onChange: (hero: Json) => void };
 
-export function HeroEditor({ hero, layout, onChange }: Props) {
+export function HeroEditor({ hero, onChange }: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const source = typeof hero.source === "string" ? hero.source : HERO_STARTER_SOURCE;
+  const source = typeof hero.source === "string" ? hero.source : "";
   const height = typeof hero.height === "number" ? hero.height : 520;
+  const [runningSource, setRunningSource] = useState(source);
+  const [revision, setRevision] = useState(0);
+  const [width, setWidth] = useState("100%");
+  const [outputHeight, setOutputHeight] = useState(height);
+  const document = useMemo(() => buildHeroDocument(runningSource), [runningSource]);
+
   useEffect(() => {
     function bridge(event: MessageEvent) {
-      if (event.source !== frame.current?.contentWindow || !event.data?.id) return;
-      if (event.data.method === "bilzing.site.get") frame.current.contentWindow?.postMessage({id:event.data.id,result:{site:{name:"Draft preview"},hero:{cta_label:typeof hero.cta_label === "string" ? hero.cta_label : "",cta_href:typeof hero.cta_href === "string" ? hero.cta_href : ""}}},"*");
-      if (event.data.method === "bilzing.cta.get") frame.current.contentWindow?.postMessage({id:event.data.id,result:{label:typeof hero.cta_label === "string" ? hero.cta_label : "",href:typeof hero.cta_href === "string" ? hero.cta_href : ""}},"*");
-      if (event.data.method === "bilzing.cta.activate") frame.current.contentWindow?.postMessage({id:event.data.id,result:{preview:true,href:hero.cta_href}},"*");
-      if (event.data.method === "bilzing.navigation.go") frame.current.contentWindow?.postMessage({id:event.data.id,result:{preview:true,href:event.data.params?.href}},"*");
-      if (event.data.method === "bilzing.analytics.track") frame.current.contentWindow?.postMessage({id:event.data.id,result:{tracked:true,preview:true}},"*");
-      if (event.data.method === "bilzing.frame.resize") frame.current.contentWindow?.postMessage({id:event.data.id,result:{height:event.data.params?.height,preview:true}},"*");
+      if (event.source !== frame.current?.contentWindow || typeof event.data?.id !== "string") return;
+      const { id, method, params } = event.data;
+      const cta = { label: hero.cta_label ?? "", href: hero.cta_href ?? "" };
+      let result: unknown;
+      switch (method) {
+        case "bilzing.site.get": result = { site: { name: "Developer preview" }, hero }; break;
+        case "bilzing.cta.get": result = cta; break;
+        case "bilzing.cta.activate": result = { preview: true, href: cta.href }; break;
+        case "bilzing.navigation.go": result = { preview: true, href: params?.href }; break;
+        case "bilzing.analytics.track": result = { tracked: false, preview: true }; break;
+        case "bilzing.frame.resize": {
+          const next = Number(params?.height);
+          if (!Number.isFinite(next)) return;
+          const clamped = Math.min(900, Math.max(320, Math.round(next)));
+          setOutputHeight(clamped); result = { height: clamped, preview: true }; break;
+        }
+        default: return;
+      }
+      frame.current?.contentWindow?.postMessage({ id, result }, "*");
     }
-    window.addEventListener("message", bridge); return () => window.removeEventListener("message", bridge);
+    window.addEventListener("message", bridge);
+    return () => window.removeEventListener("message", bridge);
   }, [hero]);
-  function update(nextSource:string, nextHeight=height) {
-    const nextHero = {...hero,mode:"custom",source:nextSource,height:nextHeight,sdk_version:"1"};
-    const pages = layout.pages && typeof layout.pages === "object" ? layout.pages as Json : {};
-    const home = pages["/"] && typeof pages["/"] === "object" ? pages["/"] as Json : {};
-    const sections = Array.isArray(home.sections) ? home.sections.filter((item):item is Json=>Boolean(item)&&typeof item==="object") : [];
-    const index = sections.findIndex((item)=>item.type==="hero"||item.type==="custom_hero");
-    const section = {id:String(sections[index]?.id??"hero"),type:"custom_hero"};
-    const nextSections = index >= 0 ? sections.map((item,position)=>position===index?section:item) : [section,...sections];
-    onChange(nextHero,{...layout,pages:{...pages,"/":{...home,sections:nextSections}}});
+
+  function update(nextSource: string, nextHeight = height) {
+    onChange({ ...hero, mode: "custom", source: nextSource, height: nextHeight, sdk_version: "1" });
   }
-  return <section className="mb-5 rounded-lg border bg-card p-5"><div><h2 className="font-semibold">React hero runtime</h2><p className="mt-1 text-sm text-muted-foreground">Write executable React and JSX. This is compiled and mounted as a React root in an isolated frame, not rendered as static HTML. It can use approved packages while network requests, nested frames, forms and parent-page access remain blocked.</p></div><div className="mt-5 grid gap-5 xl:grid-cols-2"><div><div className="mb-2 flex items-center justify-between"><label htmlFor="hero-source" className="text-sm font-medium">React source</label><button type="button" className="text-xs text-muted-foreground underline" onClick={()=>update(HERO_STARTER_SOURCE)}>Restore starter</button></div><textarea id="hero-source" className="min-h-[560px] w-full rounded-md border bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100" spellCheck={false} value={source} onChange={(event)=>update(event.target.value)} /><label className="mt-3 block text-sm">Frame height<input className="ml-3 w-24 rounded-md border bg-background px-2 py-1" type="number" min={320} max={900} value={height} onChange={(event)=>update(source,Number(event.target.value))} /> px</label></div><div><p className="mb-2 text-sm font-medium">Live React output</p><iframe ref={frame} title="Hero code preview" className="w-full rounded-md border bg-white" style={{height}} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={buildHeroDocument(source)} /></div></div><details className="mt-4 text-sm"><summary className="cursor-pointer font-medium">React runtime and Bilzing SDK</summary><pre className="mt-2 overflow-x-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">{HERO_RUNTIME_GUIDE}{"\n\n"}{`await bilzing.site.get()\nawait bilzing.navigation.go("/contact")\nawait bilzing.analytics.track("hero_action", { placement: "primary" })\nawait bilzing.frame.resize(640)`}</pre></details></section>;
+
+  return <section className="space-y-5">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <label htmlFor="react-source" className="text-sm font-medium">React / JSX</label>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm">Height <input aria-label="Frame height in pixels" className="w-20 rounded-md border bg-background px-2 py-1" type="number" min={320} max={900} value={height} onChange={(event) => {
+          const value = Math.min(900, Math.max(320, Math.round(Number(event.target.value) || 520)));
+          update(source, value); setOutputHeight(value);
+        }} /></label>
+        <select aria-label="Preview viewport" className="rounded-md border bg-background px-2 py-1 text-sm" value={width} onChange={(event) => setWidth(event.target.value)}>
+          <option value="100%">Desktop</option><option value="768px">Tablet</option><option value="390px">Mobile</option>
+        </select>
+        <Button variant="outline" onClick={() => { setRunningSource(source); setRevision((value) => value + 1); setOutputHeight(height); }}>Run React</Button>
+      </div>
+    </div>
+    <textarea id="react-source" className="min-h-[360px] w-full resize-y rounded-md bg-slate-950 p-4 font-mono text-sm leading-6 text-slate-100 outline-offset-4" spellCheck={false} value={source} placeholder="Write React JSX and call render(<App />)." onChange={(event) => update(event.target.value)} />
+    <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Rendered output</span><span>{source !== runningSource ? "Source changed — run to update" : "Isolated React runtime"}</span></div>
+    <div className="overflow-x-auto">
+      <iframe key={revision} ref={frame} title="React rendered output" className="mx-auto block border-0 bg-white" style={{ height: outputHeight, width, maxWidth: "100%" }} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={document} />
+    </div>
+    <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">Runtime API</summary><p className="mt-2 max-w-4xl leading-6">{HERO_RUNTIME_GUIDE} The preview does not perform real navigation or send analytics. Source is isolated from admin credentials.</p></details>
+  </section>;
 }

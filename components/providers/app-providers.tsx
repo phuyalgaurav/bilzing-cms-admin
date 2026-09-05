@@ -30,6 +30,7 @@ import type { Role, TenantConfig, TenantTheme } from "@/lib/types";
 import { invalidateAdminModuleDirectory } from "@/lib/module-api";
 
 interface AuthContextValue {
+  isDeveloper: boolean;
   ready: boolean;
   access: string | null;
   role?: Role;
@@ -46,6 +47,7 @@ interface TenantContextValue {
 }
 
 interface SessionResponse {
+  is_developer?: boolean;
   access: string;
   role?: Role;
 }
@@ -134,6 +136,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [access, setAccess] = useState<string | null>(null);
   const [role, setRole] = useState<Role>();
+  const [isDeveloper, setIsDeveloper] = useState(false);
   const lastRefreshAt = useRef(0);
   const bootstrapStarted = useRef(false);
   const sessionRevision = useRef(0);
@@ -146,6 +149,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccess(null);
     setAccessToken(null);
     setRole(undefined);
+    setIsDeveloper(false);
     if (reason) window.sessionStorage.setItem("cms-auth-reason", reason);
     else window.sessionStorage.removeItem("cms-auth-reason");
   }, []);
@@ -156,6 +160,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     invalidateAdminModuleDirectory();
     setAccess((current) => (current === session.access ? current : session.access));
     setAccessToken(session.access);
+    setIsDeveloper(session.is_developer === true);
     setRole((current) => (current === session.role ? current : session.role));
     setReady(true);
     window.sessionStorage.removeItem("cms-auth-reason");
@@ -279,8 +284,8 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearSession, router]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ready, access, role, login, acceptInvite, logout }),
-    [acceptInvite, access, login, logout, ready, role],
+    () => ({ ready, access, role, isDeveloper, login, acceptInvite, logout }),
+    [acceptInvite, access, login, logout, ready, role, isDeveloper],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       result.cookies.delete("cms_refresh");
       return result;
     }
-    const result = NextResponse.json({ access: data.access, role: data.role });
+    const result = NextResponse.json({ access: data.access, role: data.role, is_developer: data.is_developer === true });
     if (data.refresh)
       result.cookies.set("cms_refresh", data.refresh, {
         httpOnly: true,
